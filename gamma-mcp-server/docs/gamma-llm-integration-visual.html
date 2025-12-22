@@ -1,0 +1,611 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gamma MCP + LLM Integration Architecture</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background: #0a0a0a;
+            color: #e0e0e0;
+            overflow-x: auto;
+        }
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+        h1, h2, h3 {
+            color: #fff;
+            font-weight: 600;
+        }
+        h1 {
+            text-align: center;
+            margin-bottom: 40px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            font-size: 2.5em;
+        }
+        .architecture-diagram {
+            background: #1a1a1a;
+            border-radius: 16px;
+            padding: 40px;
+            margin: 30px 0;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.5);
+        }
+        .flow-container {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            gap: 30px;
+            margin: 40px 0;
+            flex-wrap: wrap;
+        }
+        .layer {
+            flex: 1;
+            min-width: 250px;
+            background: #2a2a2a;
+            border-radius: 12px;
+            padding: 20px;
+            border: 2px solid #3a3a3a;
+            transition: all 0.3s ease;
+        }
+        .layer:hover {
+            border-color: #667eea;
+            transform: translateY(-5px);
+            box-shadow: 0 10px 30px rgba(102, 126, 234, 0.3);
+        }
+        .layer-title {
+            color: #667eea;
+            font-weight: bold;
+            margin-bottom: 15px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            font-size: 0.9em;
+        }
+        .component {
+            background: #3a3a3a;
+            padding: 15px;
+            margin: 10px 0;
+            border-radius: 8px;
+            border-left: 3px solid #667eea;
+        }
+        .arrow {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #667eea;
+            font-size: 24px;
+            margin: 0 10px;
+        }
+        .parameter-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+            margin: 30px 0;
+        }
+        .param-card {
+            background: #2a2a2a;
+            border-radius: 12px;
+            padding: 20px;
+            border: 1px solid #3a3a3a;
+        }
+        .param-card h3 {
+            color: #764ba2;
+            margin-top: 0;
+        }
+        .code-block {
+            background: #1a1a1a;
+            border: 1px solid #3a3a3a;
+            border-radius: 8px;
+            padding: 15px;
+            overflow-x: auto;
+            font-family: 'Monaco', 'Menlo', monospace;
+            font-size: 0.9em;
+            margin: 15px 0;
+        }
+        .code-block pre {
+            margin: 0;
+            color: #e0e0e0;
+        }
+        .feature-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin: 20px 0;
+        }
+        .feature-item {
+            background: #3a3a3a;
+            padding: 15px;
+            border-radius: 8px;
+            text-align: center;
+            border: 1px solid #4a4a4a;
+            transition: all 0.3s ease;
+        }
+        .feature-item:hover {
+            background: #4a4a4a;
+            transform: scale(1.05);
+        }
+        .process-flow {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+            margin: 30px 0;
+            padding: 20px;
+            background: #1a1a1a;
+            border-radius: 12px;
+            overflow-x: auto;
+        }
+        .process-step {
+            flex-shrink: 0;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 15px 25px;
+            border-radius: 25px;
+            font-weight: bold;
+            white-space: nowrap;
+        }
+        .flexibility-matrix {
+            overflow-x: auto;
+            margin: 30px 0;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            background: #2a2a2a;
+            border-radius: 8px;
+            overflow: hidden;
+        }
+        th, td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid #3a3a3a;
+        }
+        th {
+            background: #3a3a3a;
+            color: #667eea;
+            font-weight: bold;
+        }
+        tr:hover {
+            background: #333;
+        }
+        .tag {
+            display: inline-block;
+            padding: 4px 12px;
+            background: #667eea;
+            color: white;
+            border-radius: 12px;
+            font-size: 0.85em;
+            margin: 2px;
+        }
+        .tag.secondary {
+            background: #764ba2;
+        }
+        .interactive-demo {
+            background: #2a2a2a;
+            border-radius: 12px;
+            padding: 30px;
+            margin: 40px 0;
+            border: 2px solid #667eea;
+        }
+        .demo-input {
+            width: 100%;
+            padding: 15px;
+            background: #1a1a1a;
+            border: 1px solid #3a3a3a;
+            color: #e0e0e0;
+            border-radius: 8px;
+            font-size: 16px;
+            margin: 10px 0;
+        }
+        .demo-output {
+            background: #1a1a1a;
+            border-radius: 8px;
+            padding: 20px;
+            margin-top: 20px;
+            border: 1px solid #3a3a3a;
+        }
+        @media (max-width: 768px) {
+            .flow-container {
+                flex-direction: column;
+            }
+            .arrow {
+                transform: rotate(90deg);
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🚀 Gamma MCP + LLM Integration Architecture</h1>
+        
+        <div class="architecture-diagram">
+            <h2>System Architecture Overview</h2>
+            <div class="flow-container">
+                <div class="layer">
+                    <div class="layer-title">Input Layer</div>
+                    <div class="component">
+                        <strong>User Request</strong>
+                        <p style="font-size: 0.9em; margin: 5px 0;">Natural language prompt</p>
+                    </div>
+                    <div class="component">
+                        <strong>Context Data</strong>
+                        <p style="font-size: 0.9em; margin: 5px 0;">Brand guidelines, templates, preferences</p>
+                    </div>
+                </div>
+                
+                <div class="arrow">→</div>
+                
+                <div class="layer">
+                    <div class="layer-title">LLM Processing</div>
+                    <div class="component">
+                        <strong>Intent Analysis</strong>
+                        <p style="font-size: 0.9em; margin: 5px 0;">Understand user goals</p>
+                    </div>
+                    <div class="component">
+                        <strong>Content Generation</strong>
+                        <p style="font-size: 0.9em; margin: 5px 0;">Create structured content</p>
+                    </div>
+                    <div class="component">
+                        <strong>Parameter Mapping</strong>
+                        <p style="font-size: 0.9em; margin: 5px 0;">Convert to Gamma params</p>
+                    </div>
+                </div>
+                
+                <div class="arrow">→</div>
+                
+                <div class="layer">
+                    <div class="layer-title">MCP Protocol</div>
+                    <div class="component">
+                        <strong>Tool Selection</strong>
+                        <p style="font-size: 0.9em; margin: 5px 0;">gamma_generate</p>
+                    </div>
+                    <div class="component">
+                        <strong>Parameter Validation</strong>
+                        <p style="font-size: 0.9em; margin: 5px 0;">Zod schema validation</p>
+                    </div>
+                </div>
+                
+                <div class="arrow">→</div>
+                
+                <div class="layer">
+                    <div class="layer-title">Gamma API</div>
+                    <div class="component">
+                        <strong>Content Generation</strong>
+                        <p style="font-size: 0.9em; margin: 5px 0;">AI-powered creation</p>
+                    </div>
+                    <div class="component">
+                        <strong>Visual Rendering</strong>
+                        <p style="font-size: 0.9em; margin: 5px 0;">Theme & style application</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="architecture-diagram">
+            <h2>LLM Decision Flow</h2>
+            <div class="process-flow">
+                <div class="process-step">User Input</div>
+                <div class="arrow">→</div>
+                <div class="process-step">Parse Intent</div>
+                <div class="arrow">→</div>
+                <div class="process-step">Extract Requirements</div>
+                <div class="arrow">→</div>
+                <div class="process-step">Generate Content</div>
+                <div class="arrow">→</div>
+                <div class="process-step">Map Parameters</div>
+                <div class="arrow">→</div>
+                <div class="process-step">Call MCP Tool</div>
+                <div class="arrow">→</div>
+                <div class="process-step">Process Result</div>
+            </div>
+        </div>
+
+        <h2>Parameter Mapping Intelligence</h2>
+        <div class="parameter-grid">
+            <div class="param-card">
+                <h3>Format Detection</h3>
+                <div class="code-block">
+                    <pre>{
+  "pitch deck" → "presentation"
+  "report" → "document"
+  "instagram post" → "social"
+  "slides" → "presentation"
+  "whitepaper" → "document"
+}</pre>
+                </div>
+                <p>LLM maps natural language to format types</p>
+            </div>
+            
+            <div class="param-card">
+                <h3>Audience Analysis</h3>
+                <div class="code-block">
+                    <pre>{
+  "C-suite" → "executives"
+  "investors" → "venture capitalists"
+  "team" → "internal stakeholders"
+  "public" → "general audience"
+}</pre>
+                </div>
+                <p>Context-aware audience mapping</p>
+            </div>
+            
+            <div class="param-card">
+                <h3>Tone Inference</h3>
+                <div class="code-block">
+                    <pre>{
+  context: "board meeting"
+  → tone: "formal"
+  
+  context: "team update"
+  → tone: "casual"
+  
+  context: "sales pitch"
+  → tone: "persuasive"
+}</pre>
+                </div>
+                <p>Contextual tone selection</p>
+            </div>
+            
+            <div class="param-card">
+                <h3>Content Volume</h3>
+                <div class="code-block">
+                    <pre>{
+  "quick overview" → "brief"
+  "detailed analysis" → "detailed"
+  "standard presentation" → "medium"
+  
+  // Dynamic calculation
+  complexity * depth = volume
+}</pre>
+                </div>
+                <p>Smart content amount selection</p>
+            </div>
+        </div>
+
+        <div class="architecture-diagram">
+            <h2>Flexibility & Control Points</h2>
+            <div class="flexibility-matrix">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Control Point</th>
+                            <th>LLM Capability</th>
+                            <th>User Override</th>
+                            <th>Dynamic Behavior</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><strong>Content Structure</strong></td>
+                            <td>
+                                <span class="tag">Auto-outline</span>
+                                <span class="tag">Smart sections</span>
+                                <span class="tag">Flow optimization</span>
+                            </td>
+                            <td>Custom templates</td>
+                            <td>Adapts to content length</td>
+                        </tr>
+                        <tr>
+                            <td><strong>Visual Style</strong></td>
+                            <td>
+                                <span class="tag">Theme matching</span>
+                                <span class="tag">Brand alignment</span>
+                            </td>
+                            <td>Specific theme selection</td>
+                            <td>Context-aware styling</td>
+                        </tr>
+                        <tr>
+                            <td><strong>Language & Tone</strong></td>
+                            <td>
+                                <span class="tag">Multi-lingual</span>
+                                <span class="tag">Register detection</span>
+                            </td>
+                            <td>Explicit language/tone</td>
+                            <td>Audience-based adjustment</td>
+                        </tr>
+                        <tr>
+                            <td><strong>Image Generation</strong></td>
+                            <td>
+                                <span class="tag">Style inference</span>
+                                <span class="tag">Source selection</span>
+                            </td>
+                            <td>Manual source/style</td>
+                            <td>Quality-based selection</td>
+                        </tr>
+                        <tr>
+                            <td><strong>Content Depth</strong></td>
+                            <td>
+                                <span class="tag">Complexity analysis</span>
+                                <span class="tag">Detail level</span>
+                            </td>
+                            <td>Set card count</td>
+                            <td>Expands based on topic</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="architecture-diagram">
+            <h2>Advanced Generation Strategies</h2>
+            <div class="feature-grid">
+                <div class="feature-item">
+                    <h4>🎯 Iterative Refinement</h4>
+                    <p>Multiple passes for perfection</p>
+                </div>
+                <div class="feature-item">
+                    <h4>📊 A/B Testing</h4>
+                    <p>Generate variants for comparison</p>
+                </div>
+                <div class="feature-item">
+                    <h4>🔄 Feedback Loop</h4>
+                    <p>Learn from results</p>
+                </div>
+                <div class="feature-item">
+                    <h4>🎨 Style Transfer</h4>
+                    <p>Apply brand consistency</p>
+                </div>
+                <div class="feature-item">
+                    <h4>🌍 Localization</h4>
+                    <p>Multi-language support</p>
+                </div>
+                <div class="feature-item">
+                    <h4>📈 Performance Tracking</h4>
+                    <p>Optimize over time</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="interactive-demo">
+            <h2>Example: LLM Processing Pipeline</h2>
+            <div class="demo-input">
+                <strong>User Input:</strong> "Create a 10-slide investor pitch for our B2B SaaS platform that helps restaurants manage inventory. Professional but engaging, with data visualizations."
+            </div>
+            
+            <div class="demo-output">
+                <h3>LLM Analysis & Parameter Generation:</h3>
+                <div class="code-block">
+                    <pre>{
+  "inputText": `# RestaurantOS - Smart Inventory Management
+    
+## Slide 1: Title & Vision
+RestaurantOS: Revolutionizing Restaurant Inventory Management
+"Reduce waste by 30%, increase profits by 15%"
+
+## Slide 2: The Problem
+- $162B annual food waste in US restaurants
+- 4-10% of food purchased is wasted
+- Manual inventory tracking is error-prone
+- Lack of real-time insights
+
+## Slide 3: Our Solution
+AI-powered inventory management platform:
+• Automated tracking with IoT sensors
+• Predictive analytics for ordering
+• Real-time waste monitoring
+• Integration with POS systems
+
+## Slide 4: Market Opportunity
+- TAM: $3.2B restaurant tech market
+- SAM: $890M inventory management
+- SOM: $89M (10% in 5 years)
+- 650,000+ restaurants in the US
+
+## Slide 5: Product Demo
+[Visual workflow showing]:
+1. Automatic inventory tracking
+2. AI predictions for ordering
+3. Waste reduction analytics
+4. ROI dashboard
+
+## Slide 6: Business Model
+- SaaS subscription: $299-899/month
+- Tiered pricing by restaurant size
+- Additional revenue: Hardware sensors
+- 85% gross margins
+
+## Slide 7: Traction & Metrics
+- 150 restaurants onboarded
+- $2.1M ARR
+- 125% NRR
+- 3.2 month payback period
+- 45 NPS score
+
+## Slide 8: Go-to-Market Strategy
+- Direct sales to restaurant chains
+- Partnership with POS providers
+- Industry trade shows
+- Content marketing & SEO
+
+## Slide 9: Team
+- CEO: 15 years restaurant tech
+- CTO: Ex-Google, AI expertise  
+- VP Sales: Scaled 3 SaaS to $50M
+- Advisory: Restaurant industry veterans
+
+## Slide 10: The Ask
+- Raising $5M Series A
+- Use of funds:
+  • 40% Sales & Marketing
+  • 35% Product Development
+  • 25% Operations
+- Path to $50M ARR in 3 years`,
+
+  "format": "presentation",
+  "numCards": 10,
+  "textMode": "generate",
+  "themeName": "professional",
+  
+  "textOptions": {
+    "amount": "medium",
+    "tone": "persuasive yet data-driven",
+    "audience": "venture capitalists and investors",
+    "language": "English"
+  },
+  
+  "imageOptions": {
+    "source": "aiGenerated",
+    "model": "dalle-3",
+    "style": "modern business infographics"
+  },
+  
+  "sharingOptions": {
+    "workspaceAccess": "view_only",
+    "externalAccess": "password_protected"
+  }
+}</pre>
+                </div>
+            </div>
+        </div>
+
+        <div class="architecture-diagram">
+            <h2>Implementation Best Practices</h2>
+            <div class="parameter-grid">
+                <div class="param-card">
+                    <h3>🧠 LLM Preprocessing</h3>
+                    <ul style="margin: 10px 0; padding-left: 20px;">
+                        <li>Validate requirements completeness</li>
+                        <li>Enrich with missing context</li>
+                        <li>Structure content hierarchically</li>
+                        <li>Optimize for Gamma's parser</li>
+                    </ul>
+                </div>
+                
+                <div class="param-card">
+                    <h3>⚡ Performance Optimization</h3>
+                    <ul style="margin: 10px 0; padding-left: 20px;">
+                        <li>Cache common templates</li>
+                        <li>Batch similar requests</li>
+                        <li>Parallel generation for variants</li>
+                        <li>Progressive enhancement</li>
+                    </ul>
+                </div>
+                
+                <div class="param-card">
+                    <h3>🎯 Quality Assurance</h3>
+                    <ul style="margin: 10px 0; padding-left: 20px;">
+                        <li>Validate output completeness</li>
+                        <li>Check brand consistency</li>
+                        <li>Verify data accuracy</li>
+                        <li>Test audience alignment</li>
+                    </ul>
+                </div>
+                
+                <div class="param-card">
+                    <h3>🔄 Iteration Strategy</h3>
+                    <ul style="margin: 10px 0; padding-left: 20px;">
+                        <li>Set quality thresholds</li>
+                        <li>Define retry conditions</li>
+                        <li>Implement fallback options</li>
+                        <li>Track improvement metrics</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

@@ -1,0 +1,45 @@
+name: Deploy mcp-hub to Cloud Run (optional)
+
+on:
+  workflow_dispatch: {}
+  push:
+    branches: ["main"]
+    paths:
+      - "mcp-hub/**"
+      - ".github/workflows/mcp-hub-cloudrun.yml"
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  deploy:
+    # Guard: skip unless these secrets are configured in the repo.
+    if: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER != '' && secrets.GCP_SERVICE_ACCOUNT != '' && secrets.GCP_PROJECT_ID != '' && secrets.GCP_REGION != '' && secrets.CLOUD_RUN_SERVICE != '' }}
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Auth to Google Cloud (Workload Identity Federation)
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+
+      - name: Set up gcloud
+        uses: google-github-actions/setup-gcloud@v2
+        with:
+          project_id: ${{ secrets.GCP_PROJECT_ID }}
+
+      - name: Deploy to Cloud Run (source build)
+        run: >
+          gcloud run deploy "${{ secrets.CLOUD_RUN_SERVICE }}"
+          --source ./mcp-hub
+          --region "${{ secrets.GCP_REGION }}"
+          --platform managed
+          --allow-unauthenticated
+          --set-env-vars HOST=0.0.0.0,PORT=8080
+
+
