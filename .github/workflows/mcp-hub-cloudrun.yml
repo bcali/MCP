@@ -15,7 +15,7 @@ permissions:
 jobs:
   deploy:
     # Guard: skip unless these secrets are configured in the repo.
-    if: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER != '' && secrets.GCP_SERVICE_ACCOUNT != '' && secrets.GCP_PROJECT_ID != '' && secrets.GCP_REGION != '' && secrets.CLOUD_RUN_SERVICE != '' }}
+    if: ${{ secrets.GCP_WIF_PROVIDER != '' && secrets.GCP_SERVICE_ACCOUNT != '' && secrets.GCP_PROJECT_ID != '' && secrets.GCP_REGION != '' && secrets.CLOUD_RUN_SERVICE != '' && secrets.MCP_HUB_API_KEY != '' && secrets.DATABASE_URL != '' }}
     runs-on: ubuntu-latest
 
     steps:
@@ -25,7 +25,7 @@ jobs:
       - name: Auth to Google Cloud (Workload Identity Federation)
         uses: google-github-actions/auth@v2
         with:
-          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          workload_identity_provider: ${{ secrets.GCP_WIF_PROVIDER }}
           service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
 
       - name: Set up gcloud
@@ -37,9 +37,10 @@ jobs:
         run: >
           gcloud run deploy "${{ secrets.CLOUD_RUN_SERVICE }}"
           --source ./mcp-hub
+          --project "${{ secrets.GCP_PROJECT_ID }}"
           --region "${{ secrets.GCP_REGION }}"
           --platform managed
           --allow-unauthenticated
-          --set-env-vars HOST=0.0.0.0,PORT=8080
+          --set-env-vars HOST=0.0.0.0,PORT=8080,MCP_HUB_API_KEY="${{ secrets.MCP_HUB_API_KEY }}",DATABASE_URL="${{ secrets.DATABASE_URL }}"
 
 

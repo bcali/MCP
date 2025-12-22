@@ -57,11 +57,13 @@ This repo includes an **optional** workflow: `.github/workflows/mcp-hub-cloudrun
 
 It’s guarded and will only run after you add these **repo secrets**:
 
-- `GCP_WORKLOAD_IDENTITY_PROVIDER`
+- `GCP_WIF_PROVIDER`
 - `GCP_SERVICE_ACCOUNT`
 - `GCP_PROJECT_ID`
 - `GCP_REGION`
 - `CLOUD_RUN_SERVICE`
+- `MCP_HUB_API_KEY`
+- `DATABASE_URL`
 
 Then it will deploy on push to `main` (and can also be run manually).
 
