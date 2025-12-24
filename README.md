@@ -14,6 +14,13 @@ A production-ready **Cloud MCP Gateway** that centralizes access to multiple too
 - **Cloud Native**: Designed for Google Cloud Run with SSE support and session affinity.
 - **Persistent**: Backed by Postgres (Supabase) for durable cross-session memory.
 
+### 🖥️ [MCP Console](./mcp-console)
+A modern **Management Dashboard** for your MCP Hub.
+- **Real-time Monitoring**: Track server uptime, version, and active client sessions.
+- **Tool Catalog**: Browse all registered tools and their schemas.
+- **Execution History**: View detailed traces of every tool run.
+- **Connection Manager**: Configure and test new MCP server upstream connections.
+
 ### 🎨 [Gamma MCP Server](./gamma-mcp-server)
 An MCP server for the [Gamma Generate API](https://developers.gamma.app).
 - **Automated Design**: Generate presentations, documents, and social cards directly from your AI assistant.
@@ -39,6 +46,7 @@ See the [mcp-hub deployment guide](./mcp-hub#deployment) for instructions on set
 .
 ├── .github/workflows/      # CI/CD Pipelines
 ├── gamma-mcp-server/       # Gamma API Integration
+├── mcp-console/            # React Management Dashboard
 ├── mcp-hub/                # Cloud Gateway & State Hub
 └── README.md               # You are here
 ```

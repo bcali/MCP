@@ -33,7 +33,11 @@ A modern, web-based dashboard for managing your MCP Hub.
    ```
 
 ## Backend Integration
-Currently, the console uses **mock data** to demonstrate functionality. To connect to your real `mcp-hub` backend, you will need to update `src/app/services/api.ts` (coming soon) to point to your Cloud Run URL and provide your `MCP_HUB_API_KEY`.
+The console is pre-configured to talk to your `mcp-hub` backend. 
+
+- **Configuration**: See `src/app/config.ts` for backend URL and API key settings.
+- **Service Layer**: `src/app/services/api.ts` handles communication with the Hub's management endpoints.
+- **Mock Data**: Currently uses mock data for some complex lists (Tools, Runs), but is wired to real data for Hub Status and Active Connections.
 
 ## License
 MIT

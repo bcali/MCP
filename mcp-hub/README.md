@@ -63,6 +63,7 @@ This repository includes a CI/CD pipeline that deploys to Cloud Run on every pus
 - **SSE Transport**: Uses standard Server-Sent Events for high compatibility.
 - **Session Affinity**: Required for Cloud Run to ensure POST commands reach the correct established SSE stream.
 - **Stateless Core**: All state is offloaded to Postgres and R2.
+- **Management API**: Exposes `/v1/status` and `/v1/runs` for the [MCP Console](../mcp-console).
 
 ## 📜 License
 MIT
