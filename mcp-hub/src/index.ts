@@ -84,7 +84,12 @@ app.post('/v1/connections', apiKeyAuth(env.MCP_HUB_API_KEY), express.json(), asy
 
 app.delete('/v1/connections/:id', apiKeyAuth(env.MCP_HUB_API_KEY), async (req, res) => {
   try {
-    await store.deleteConnection(req.params.id);
+    const { id } = req.params;
+    if (!id) {
+      res.status(400).json({ error: 'Missing connection ID' });
+      return;
+    }
+    await store.deleteConnection(id);
     res.status(204).send();
   } catch (e) {
     console.error('[mcp-hub] Error deleting connection:', e);
