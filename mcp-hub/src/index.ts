@@ -48,7 +48,7 @@ app.get('/v1/sse', apiKeyAuth(env.MCP_HUB_API_KEY), async (req, res) => {
   };
 });
 
-app.post('/mcp', apiKeyAuth(env.MCP_HUB_API_KEY), async (req, res) => {
+app.post('/mcp', async (req, res) => {
   const sessionId = req.query.sessionId as string;
   const transport = transports.get(sessionId);
 
