@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import express from 'express';
+import cors from 'cors';
 import dotenv from 'dotenv';
 import { randomUUID } from 'node:crypto';
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
@@ -27,6 +28,7 @@ registerTools(server, store, env);
 
 const app = express();
 app.disable('x-powered-by');
+app.use(cors()); // Enable CORS for all origins (needed for GitHub Pages console)
 
 app.get('/healthz', (_req, res) => res.status(200).json({ ok: true }));
 
