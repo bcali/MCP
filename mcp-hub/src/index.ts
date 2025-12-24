@@ -35,10 +35,10 @@ app.get('/healthz', (_req, res) => res.status(200).json({ ok: true }));
 const transports = new Map<string, SSEServerTransport>();
 
 app.get('/v1/sse', apiKeyAuth(env.MCP_HUB_API_KEY), async (req, res) => {
-  console.error('[mcp-hub] New SSE connection attempt');
   const transport = new SSEServerTransport('/mcp', res);
-  const sessionId = randomUUID();
+  const sessionId = transport.sessionId;
   transports.set(sessionId, transport);
+  console.error(`[mcp-hub] New SSE connection established. Session: ${sessionId}`);
   
   await server.connect(transport);
   
