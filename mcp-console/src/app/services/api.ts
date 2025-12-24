@@ -13,6 +13,18 @@ export async function getHubStatus(): Promise<HubStatus> {
   return res.json();
 }
 
+export interface Tool {
+  name: string;
+  description?: string;
+  inputSchema: any;
+}
+
+export async function getTools(): Promise<Tool[]> {
+  const res = await fetch(`${config.hubUrl}/v1/tools?key=${config.hubApiKey}`);
+  if (!res.ok) throw new Error('Failed to fetch tools');
+  return res.json();
+}
+
 export async function getRecentRuns(): Promise<any[]> {
   const res = await fetch(`${config.hubUrl}/v1/runs?key=${config.hubApiKey}`);
   if (!res.ok) throw new Error('Failed to fetch runs');

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   Box,
   Card,
@@ -14,9 +14,10 @@ import {
   DialogContent,
   Tabs,
   Tab,
+  CircularProgress,
 } from '@mui/material';
 import { Search, Play, Code, FileJson } from 'lucide-react';
-import { tools } from '../services/mockData';
+import { getTools, Tool } from '../services/api';
 
 function TabPanel(props: { children?: React.ReactNode; index: number; value: number }) {
   const { children, value, index, ...other } = props;
@@ -29,27 +30,39 @@ function TabPanel(props: { children?: React.ReactNode; index: number; value: num
 
 export function ToolsCatalog() {
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedTool, setSelectedTool] = useState<typeof tools[0] | null>(null);
+  const [tools, setTools] = useState<Tool[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [selectedTool, setSelectedTool] = useState<Tool | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [tabValue, setTabValue] = useState(0);
+
+  useEffect(() => {
+    getTools()
+      .then(setTools)
+      .catch(err => setError(err.message))
+      .finally(() => setLoading(false));
+  }, []);
 
   const filteredTools = tools.filter(
     (tool) =>
       tool.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      tool.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      tool.connectionName.toLowerCase().includes(searchQuery.toLowerCase())
+      (tool.description || '').toLowerCase().includes(searchQuery.toLowerCase())
   );
+
+  if (loading) return <Box display="flex" justifyContent="center" py={10}><CircularProgress /></Box>;
+  if (error) return <Box py={4}><Typography color="error">Error: {error}</Typography></Box>;
 
   return (
     <Box>
       <Box mb={4}>
         <Typography variant="h4" gutterBottom>Tools Catalog</Typography>
-        <Typography variant="body2" color="text.secondary">Browse and test all available MCP tools</Typography>
+        <Typography variant="body2" color="text.secondary">Real-time catalog of tools registered on your Hub</Typography>
       </Box>
 
       <TextField
         fullWidth
-        placeholder="Search tools by name, description, or connection..."
+        placeholder="Search tools by name or description..."
         value={searchQuery}
         onChange={(e) => setSearchQuery(e.target.value)}
         InputProps={{
@@ -60,18 +73,17 @@ export function ToolsCatalog() {
 
       <Grid container spacing={3}>
         {filteredTools.map((tool) => (
-          <Grid item xs={12} md={6} lg={4} key={tool.id}>
+          <Grid item xs={12} md={6} lg={4} key={tool.name}>
             <Card sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
               <CardContent sx={{ flexGrow: 1 }}>
                 <Box display="flex" alignItems="center" gap={1} mb={2}>
                   <Code size={18} />
                   <Typography variant="h6">{tool.name}</Typography>
                 </Box>
-                <Typography variant="body2" color="text.secondary" mb={3}>{tool.description}</Typography>
-                <Box mb={3}>
-                  <Typography variant="body2" color="text.secondary" gutterBottom>Connection</Typography>
-                  <Chip label={tool.connectionName} size="small" variant="outlined" />
-                </Box>
+                <Typography variant="body2" color="text.secondary" mb={3}>
+                  {tool.description || 'No description provided.'}
+                </Typography>
+                
                 <Box display="flex" flexDirection="column" gap={1}>
                   <Button variant="outlined" fullWidth startIcon={<FileJson size={16} />} onClick={() => { setSelectedTool(tool); setDialogOpen(true); }}>
                     View Schema

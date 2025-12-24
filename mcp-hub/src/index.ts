@@ -40,6 +40,17 @@ app.get('/v1/status', apiKeyAuth(env.MCP_HUB_API_KEY), async (_req, res) => {
   });
 });
 
+app.get('/v1/tools', apiKeyAuth(env.MCP_HUB_API_KEY), async (_req, res) => {
+  try {
+    // We can call the server's internal listTools handler
+    const result = await server.listTools();
+    res.json(result.tools);
+  } catch (e) {
+    console.error('[mcp-hub] Error listing tools:', e);
+    res.status(500).json({ error: 'Failed to list tools' });
+  }
+});
+
 app.get('/v1/runs', apiKeyAuth(env.MCP_HUB_API_KEY), async (_req, res) => {
   // HubStore doesn't have a listRuns yet, but we can add it or just return empty for now
   // For now, let's try to get what we can from the store if it supports it
