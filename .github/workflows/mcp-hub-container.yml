@@ -29,6 +29,10 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Lowercase repo name
+        run: |
+          echo "REPO_LOWER=${GITHUB_REPOSITORY,,}" >> ${GITHUB_ENV}
+
       - name: Build & push
         uses: docker/build-push-action@v6
         with:
@@ -36,8 +40,8 @@ jobs:
           file: ./mcp-hub/Dockerfile
           push: true
           tags: |
-            ghcr.io/${{ github.repository }}/mcp-hub:latest
-            ghcr.io/${{ github.repository }}/mcp-hub:${{ github.sha }}
+            ghcr.io/${{ env.REPO_LOWER }}/mcp-hub:latest
+            ghcr.io/${{ env.REPO_LOWER }}/mcp-hub:${{ github.sha }}
 
 
 
