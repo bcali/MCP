@@ -7,7 +7,7 @@ import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { SSEServerTransport } from '@modelcontextprotocol/sdk/server/sse.js';
 import { loadEnv } from './config.js';
 import { apiKeyAuth } from './auth.js';
-import { registerTools } from './tools.js';
+import { registerTools, TOOLS } from './tools.js';
 import { createStore } from './store/index.js';
 
 dotenv.config();
@@ -44,9 +44,7 @@ app.get('/v1/status', apiKeyAuth(env.MCP_HUB_API_KEY), async (_req, res) => {
 
 app.get('/v1/tools', apiKeyAuth(env.MCP_HUB_API_KEY), async (_req, res) => {
   try {
-    // We can call the server's internal listTools handler
-    const result = await server.listTools();
-    res.json(result.tools);
+    res.json(TOOLS);
   } catch (e) {
     console.error('[mcp-hub] Error listing tools:', e);
     res.status(500).json({ error: 'Failed to list tools' });

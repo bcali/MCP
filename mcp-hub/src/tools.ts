@@ -3,6 +3,7 @@ import {
   ErrorCode,
   ListToolsRequestSchema,
   McpError,
+  type Tool,
 } from '@modelcontextprotocol/sdk/types.js';
 import type { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { z } from 'zod';
@@ -12,6 +13,214 @@ import { figmaImport } from './tools/figma.js';
 import { githubCreatePullRequest, githubPutFile } from './tools/github.js';
 import { slackPostMessage } from './tools/slack.js';
 import { confluenceUpsertPage } from './tools/confluence.js';
+
+export const TOOLS: Tool[] = [
+  {
+    name: 'memory_put',
+    description: 'Store shared memory (notes/requirements/decisions) centrally in the hub',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        key: { type: 'string' },
+        value: { type: 'string' },
+        tags: { type: 'array', items: { type: 'string' } },
+      },
+      required: ['key', 'value'],
+    },
+  },
+  {
+    name: 'memory_get',
+    description: 'Fetch a shared memory item by key',
+    inputSchema: {
+      type: 'object',
+      properties: { key: { type: 'string' } },
+      required: ['key'],
+    },
+  },
+  {
+    name: 'memory_search',
+    description: 'Search shared memory by query and/or tags',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        query: { type: 'string' },
+        tags: { type: 'array', items: { type: 'string' } },
+      },
+    },
+  },
+  {
+    name: 'artifact_create',
+    description: 'Create an artifact record (design export, generated doc, code patch, etc.)',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        type: { type: 'string' },
+        name: { type: 'string' },
+        source: { type: 'string' },
+        contentType: { type: 'string' },
+        contentText: { type: 'string' },
+        metadata: { type: 'object' },
+      },
+      required: ['type'],
+    },
+  },
+  {
+    name: 'artifact_get',
+    description: 'Get a single artifact by id',
+    inputSchema: {
+      type: 'object',
+      properties: { id: { type: 'string' } },
+      required: ['id'],
+    },
+  },
+  {
+    name: 'artifact_list',
+    description: 'List artifacts, optionally filtered by type',
+    inputSchema: {
+      type: 'object',
+      properties: { type: { type: 'string' } },
+    },
+  },
+  {
+    name: 'link_add',
+    description: 'Add a typed link between two entities (Figma↔PR, Jira↔Confluence, etc.)',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        from: {
+          type: 'object',
+          properties: { type: { type: 'string' }, id: { type: 'string' } },
+          required: ['type', 'id'],
+        },
+        to: {
+          type: 'object',
+          properties: { type: { type: 'string' }, id: { type: 'string' } },
+          required: ['type', 'id'],
+        },
+        label: { type: 'string' },
+        url: { type: 'string' },
+      },
+      required: ['from', 'to'],
+    },
+  },
+  {
+    name: 'link_list',
+    description: 'List links, optionally filtered by endpoints',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        fromType: { type: 'string' },
+        fromId: { type: 'string' },
+        toType: { type: 'string' },
+        toId: { type: 'string' },
+      },
+    },
+  },
+  {
+    name: 'run_start',
+    description: 'Start a workflow run (useful for multi-step automation and traceability)',
+    inputSchema: {
+      type: 'object',
+      properties: { name: { type: 'string' } },
+      required: ['name'],
+    },
+  },
+  {
+    name: 'run_step',
+    description: 'Append a step to a run log',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        runId: { type: 'string' },
+        kind: { type: 'string', enum: ['note', 'tool_call', 'artifact', 'link'] },
+        message: { type: 'string' },
+        data: { type: 'object' },
+      },
+      required: ['runId', 'kind', 'message'],
+    },
+  },
+  {
+    name: 'run_complete',
+    description: 'Mark a run completed or failed',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        runId: { type: 'string' },
+        status: { type: 'string', enum: ['completed', 'failed'] },
+      },
+      required: ['runId', 'status'],
+    },
+  },
+  // Connectors (initial set)
+  {
+    name: 'figma_import',
+    description: 'Import basic metadata for a Figma file and store it as an artifact',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        fileKey: { type: 'string' },
+      },
+      required: ['fileKey'],
+    },
+  },
+  {
+    name: 'github_put_file',
+    description: 'Create or update a file in a GitHub repo (uses GITHUB_TOKEN)',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        owner: { type: 'string' },
+        repo: { type: 'string' },
+        path: { type: 'string' },
+        content: { type: 'string', description: 'Raw file contents (UTF-8). Will be base64-encoded by the hub.' },
+        message: { type: 'string' },
+        branch: { type: 'string' },
+      },
+      required: ['owner', 'repo', 'path', 'content', 'message', 'branch'],
+    },
+  },
+  {
+    name: 'github_create_pr',
+    description: 'Create a GitHub pull request (uses GITHUB_TOKEN)',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        owner: { type: 'string' },
+        repo: { type: 'string' },
+        head: { type: 'string' },
+        base: { type: 'string' },
+        title: { type: 'string' },
+        body: { type: 'string' },
+      },
+      required: ['owner', 'repo', 'head', 'base', 'title'],
+    },
+  },
+  {
+    name: 'confluence_upsert_page',
+    description: 'Create or update a Confluence page by title (uses Atlassian API token)',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        spaceKey: { type: 'string' },
+        title: { type: 'string' },
+        bodyHtml: { type: 'string', description: 'HTML body' },
+      },
+      required: ['spaceKey', 'title', 'bodyHtml'],
+    },
+  },
+  {
+    name: 'slack_post_message',
+    description: 'Post a message to Slack (uses SLACK_BOT_TOKEN)',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        channel: { type: 'string' },
+        text: { type: 'string' },
+      },
+      required: ['channel', 'text'],
+    },
+  },
+];
 
 export function registerTools(server: Server, store: HubStore, env: Env) {
   const MemoryPutSchema = z.object({
@@ -77,213 +286,7 @@ export function registerTools(server: Server, store: HubStore, env: Env) {
   });
 
   server.setRequestHandler(ListToolsRequestSchema, async () => ({
-    tools: [
-      {
-        name: 'memory_put',
-        description: 'Store shared memory (notes/requirements/decisions) centrally in the hub',
-        inputSchema: {
-          type: 'object',
-          properties: {
-            key: { type: 'string' },
-            value: { type: 'string' },
-            tags: { type: 'array', items: { type: 'string' } },
-          },
-          required: ['key', 'value'],
-        },
-      },
-      {
-        name: 'memory_get',
-        description: 'Fetch a shared memory item by key',
-        inputSchema: {
-          type: 'object',
-          properties: { key: { type: 'string' } },
-          required: ['key'],
-        },
-      },
-      {
-        name: 'memory_search',
-        description: 'Search shared memory by query and/or tags',
-        inputSchema: {
-          type: 'object',
-          properties: {
-            query: { type: 'string' },
-            tags: { type: 'array', items: { type: 'string' } },
-          },
-        },
-      },
-      {
-        name: 'artifact_create',
-        description: 'Create an artifact record (design export, generated doc, code patch, etc.)',
-        inputSchema: {
-          type: 'object',
-          properties: {
-            type: { type: 'string' },
-            name: { type: 'string' },
-            source: { type: 'string' },
-            contentType: { type: 'string' },
-            contentText: { type: 'string' },
-            metadata: { type: 'object' },
-          },
-          required: ['type'],
-        },
-      },
-      {
-        name: 'artifact_get',
-        description: 'Get a single artifact by id',
-        inputSchema: {
-          type: 'object',
-          properties: { id: { type: 'string' } },
-          required: ['id'],
-        },
-      },
-      {
-        name: 'artifact_list',
-        description: 'List artifacts, optionally filtered by type',
-        inputSchema: {
-          type: 'object',
-          properties: { type: { type: 'string' } },
-        },
-      },
-      {
-        name: 'link_add',
-        description: 'Add a typed link between two entities (Figma↔PR, Jira↔Confluence, etc.)',
-        inputSchema: {
-          type: 'object',
-          properties: {
-            from: {
-              type: 'object',
-              properties: { type: { type: 'string' }, id: { type: 'string' } },
-              required: ['type', 'id'],
-            },
-            to: {
-              type: 'object',
-              properties: { type: { type: 'string' }, id: { type: 'string' } },
-              required: ['type', 'id'],
-            },
-            label: { type: 'string' },
-            url: { type: 'string' },
-          },
-          required: ['from', 'to'],
-        },
-      },
-      {
-        name: 'link_list',
-        description: 'List links, optionally filtered by endpoints',
-        inputSchema: {
-          type: 'object',
-          properties: {
-            fromType: { type: 'string' },
-            fromId: { type: 'string' },
-            toType: { type: 'string' },
-            toId: { type: 'string' },
-          },
-        },
-      },
-      {
-        name: 'run_start',
-        description: 'Start a workflow run (useful for multi-step automation and traceability)',
-        inputSchema: {
-          type: 'object',
-          properties: { name: { type: 'string' } },
-          required: ['name'],
-        },
-      },
-      {
-        name: 'run_step',
-        description: 'Append a step to a run log',
-        inputSchema: {
-          type: 'object',
-          properties: {
-            runId: { type: 'string' },
-            kind: { type: 'string', enum: ['note', 'tool_call', 'artifact', 'link'] },
-            message: { type: 'string' },
-            data: { type: 'object' },
-          },
-          required: ['runId', 'kind', 'message'],
-        },
-      },
-      {
-        name: 'run_complete',
-        description: 'Mark a run completed or failed',
-        inputSchema: {
-          type: 'object',
-          properties: {
-            runId: { type: 'string' },
-            status: { type: 'string', enum: ['completed', 'failed'] },
-          },
-          required: ['runId', 'status'],
-        },
-      },
-      // Connectors (initial set)
-      {
-        name: 'figma_import',
-        description: 'Import basic metadata for a Figma file and store it as an artifact',
-        inputSchema: {
-          type: 'object',
-          properties: {
-            fileKey: { type: 'string' },
-          },
-          required: ['fileKey'],
-        },
-      },
-      {
-        name: 'github_put_file',
-        description: 'Create or update a file in a GitHub repo (uses GITHUB_TOKEN)',
-        inputSchema: {
-          type: 'object',
-          properties: {
-            owner: { type: 'string' },
-            repo: { type: 'string' },
-            path: { type: 'string' },
-            content: { type: 'string', description: 'Raw file contents (UTF-8). Will be base64-encoded by the hub.' },
-            message: { type: 'string' },
-            branch: { type: 'string' },
-          },
-          required: ['owner', 'repo', 'path', 'content', 'message', 'branch'],
-        },
-      },
-      {
-        name: 'github_create_pr',
-        description: 'Create a GitHub pull request (uses GITHUB_TOKEN)',
-        inputSchema: {
-          type: 'object',
-          properties: {
-            owner: { type: 'string' },
-            repo: { type: 'string' },
-            head: { type: 'string' },
-            base: { type: 'string' },
-            title: { type: 'string' },
-            body: { type: 'string' },
-          },
-          required: ['owner', 'repo', 'head', 'base', 'title'],
-        },
-      },
-      {
-        name: 'confluence_upsert_page',
-        description: 'Create or update a Confluence page by title (uses Atlassian API token)',
-        inputSchema: {
-          type: 'object',
-          properties: {
-            spaceKey: { type: 'string' },
-            title: { type: 'string' },
-            bodyHtml: { type: 'string', description: 'HTML body' },
-          },
-          required: ['spaceKey', 'title', 'bodyHtml'],
-        },
-      },
-      {
-        name: 'slack_post_message',
-        description: 'Post a message to Slack (uses SLACK_BOT_TOKEN)',
-        inputSchema: {
-          type: 'object',
-          properties: {
-            channel: { type: 'string' },
-            text: { type: 'string' },
-          },
-          required: ['channel', 'text'],
-        },
-      },
-    ],
+    tools: TOOLS,
   }));
 
   server.setRequestHandler(CallToolRequestSchema, async (request) => {
