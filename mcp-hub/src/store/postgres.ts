@@ -363,6 +363,21 @@ export class PostgresStore implements HubStore {
     };
   }
 
+  async listRuns(limit: number = 50): Promise<Run[]> {
+    const res = await this.pool.query(
+      `select id::text, name, status, created_at, updated_at from hub_runs order by created_at desc limit $1`,
+      [limit]
+    );
+    return res.rows.map((row: any) => ({
+      id: row.id,
+      name: row.name,
+      status: row.status,
+      createdAt: new Date(row.created_at).toISOString(),
+      updatedAt: new Date(row.updated_at).toISOString(),
+      steps: [], // do not fetch steps for list to keep it fast
+    }));
+  }
+
   private async getRunSteps(runId: string): Promise<RunStep[]> {
     const res = await this.pool.query(
       `select id::text, ts, kind, message, data from hub_run_steps where run_id = $1 order by ts asc`,

@@ -52,13 +52,12 @@ app.get('/v1/tools', apiKeyAuth(env.MCP_HUB_API_KEY), async (_req, res) => {
 });
 
 app.get('/v1/runs', apiKeyAuth(env.MCP_HUB_API_KEY), async (_req, res) => {
-  // HubStore doesn't have a listRuns yet, but we can add it or just return empty for now
-  // For now, let's try to get what we can from the store if it supports it
   try {
-    const artifacts = await store.listArtifacts('run'); // We often store run summaries as artifacts
-    res.json(artifacts);
+    const runs = await store.listRuns(50);
+    res.json(runs);
   } catch (e) {
-    res.json([]);
+    console.error('[mcp-hub] Error listing runs:', e);
+    res.status(500).json({ error: 'Failed to list runs' });
   }
 });
 

@@ -173,6 +173,12 @@ export class HubState {
   getRun(runId: string) {
     return this.runs.get(runId);
   }
+
+  listRuns(limit: number = 50) {
+    return [...this.runs.values()]
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+      .slice(0, limit);
+  }
 }
 
 

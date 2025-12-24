@@ -52,4 +52,8 @@ export class MemoryStore implements HubStore {
   async getRun(runId: string): Promise<Run | null> {
     return this.state.getRun(runId) ?? null;
   }
+
+  async listRuns(limit?: number): Promise<Run[]> {
+    return this.state.listRuns(limit);
+  }
 }

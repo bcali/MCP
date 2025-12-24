@@ -43,6 +43,7 @@ export interface HubStore {
   addRunStep(runId: string, step: Omit<RunStep, 'id' | 'ts'>): Promise<RunStep>;
   completeRun(runId: string, status: 'completed' | 'failed'): Promise<Run>;
   getRun(runId: string): Promise<Run | null>;
+  listRuns(limit?: number): Promise<Run[]>;
 }
 
 
