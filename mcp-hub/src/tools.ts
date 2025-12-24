@@ -9,6 +9,7 @@ import type { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { z } from 'zod';
 import type { Env } from './config.js';
 import type { HubStore } from './store/types.js';
+import { ResilienceRegistry, withTimeout } from './utils/resilience.js';
 import { figmaImport } from './tools/figma.js';
 import { githubCreatePullRequest, githubPutFile } from './tools/github.js';
 import { slackPostMessage } from './tools/slack.js';
@@ -298,6 +299,8 @@ export const STATIC_TOOLS: Tool[] = [
 ];
 
 export function registerTools(server: Server, store: HubStore, env: Env) {
+  const resilience = new ResilienceRegistry();
+
   const MemoryPutSchema = z.object({
     key: z.string().trim().min(1),
     value: z.string().min(1),
@@ -381,138 +384,161 @@ export function registerTools(server: Server, store: HubStore, env: Env) {
   server.setRequestHandler(CallToolRequestSchema, async (request) => {
     const { name, arguments: args } = request.params;
 
+    // Determine connector for isolation (blast radius control)
+    const connectorId = name.includes('_') ? name.split('_')[0] : 'core';
+    const breaker = resilience.getBreaker(connectorId);
+    const bulkhead = resilience.getBulkhead(connectorId);
+
+    if (breaker.isOpen()) {
+      throw new McpError(
+        ErrorCode.InternalError,
+        `Connector '${connectorId}' is temporarily unavailable (Circuit Breaker OPEN). Please try again later.`
+      );
+    }
+
     try {
-      switch (name) {
-        case 'memory_put': {
-          const p = MemoryPutSchema.parse(args ?? {});
-          const item = await store.upsertMemory(p.key, p.value, p.tags ?? []);
-          return { content: [{ type: 'text', text: JSON.stringify(item, null, 2) }] };
-        }
-        case 'memory_get': {
-          const p = MemoryGetSchema.parse(args ?? {});
-          const item = await store.getMemory(p.key);
-          return { content: [{ type: 'text', text: JSON.stringify(item ?? null, null, 2) }] };
-        }
-        case 'memory_search': {
-          const p = MemorySearchSchema.parse(args ?? {});
-          const results = await store.searchMemory(p.query, p.tags);
-          return { content: [{ type: 'text', text: JSON.stringify(results, null, 2) }] };
-        }
-        case 'artifact_create': {
-          const p = ArtifactCreateSchema.parse(args ?? {});
-          const artifact = await store.createArtifact(p);
-          return { content: [{ type: 'text', text: JSON.stringify(artifact, null, 2) }] };
-        }
-        case 'artifact_get': {
-          const p = ArtifactGetSchema.parse(args ?? {});
-          const artifact = await store.getArtifact(p.id);
-          return { content: [{ type: 'text', text: JSON.stringify(artifact ?? null, null, 2) }] };
-        }
-        case 'artifact_list': {
-          const p = ArtifactListSchema.parse(args ?? {});
-          const artifacts = await store.listArtifacts(p.type);
-          return { content: [{ type: 'text', text: JSON.stringify(artifacts, null, 2) }] };
-        }
-        case 'link_add': {
-          const p = LinkAddSchema.parse(args ?? {});
-          const link = await store.addLink(p);
-          return { content: [{ type: 'text', text: JSON.stringify(link, null, 2) }] };
-        }
-        case 'link_list': {
-          const p = LinkListSchema.parse(args ?? {});
-          const links = await store.listLinks(p);
-          return { content: [{ type: 'text', text: JSON.stringify(links, null, 2) }] };
-        }
-        case 'run_start': {
-          const p = RunStartSchema.parse(args ?? {});
-          const run = await store.startRun(p.name);
-          return { content: [{ type: 'text', text: JSON.stringify(run, null, 2) }] };
-        }
-        case 'run_step': {
-          const p = RunStepSchema.parse(args ?? {});
-          const step = await store.addRunStep(p.runId, { kind: p.kind, message: p.message, data: p.data });
-          return { content: [{ type: 'text', text: JSON.stringify(step, null, 2) }] };
-        }
-        case 'run_complete': {
-          const p = RunCompleteSchema.parse(args ?? {});
-          const run = await store.completeRun(p.runId, p.status);
-          return { content: [{ type: 'text', text: JSON.stringify(run, null, 2) }] };
-        }
+      const result = await bulkhead.execute(async () => {
+        return await withTimeout(
+          (async () => {
+            switch (name) {
+              case 'memory_put': {
+                const p = MemoryPutSchema.parse(args ?? {});
+                const item = await store.upsertMemory(p.key, p.value, p.tags ?? []);
+                return { content: [{ type: 'text', text: JSON.stringify(item, null, 2) }] };
+              }
+              case 'memory_get': {
+                const p = MemoryGetSchema.parse(args ?? {});
+                const item = await store.getMemory(p.key);
+                return { content: [{ type: 'text', text: JSON.stringify(item ?? null, null, 2) }] };
+              }
+              case 'memory_search': {
+                const p = MemorySearchSchema.parse(args ?? {});
+                const results = await store.searchMemory(p.query, p.tags);
+                return { content: [{ type: 'text', text: JSON.stringify(results, null, 2) }] };
+              }
+              case 'artifact_create': {
+                const p = ArtifactCreateSchema.parse(args ?? {});
+                const artifact = await store.createArtifact(p);
+                return { content: [{ type: 'text', text: JSON.stringify(artifact, null, 2) }] };
+              }
+              case 'artifact_get': {
+                const p = ArtifactGetSchema.parse(args ?? {});
+                const artifact = await store.getArtifact(p.id);
+                return { content: [{ type: 'text', text: JSON.stringify(artifact ?? null, null, 2) }] };
+              }
+              case 'artifact_list': {
+                const p = ArtifactListSchema.parse(args ?? {});
+                const artifacts = await store.listArtifacts(p.type);
+                return { content: [{ type: 'text', text: JSON.stringify(artifacts, null, 2) }] };
+              }
+              case 'link_add': {
+                const p = LinkAddSchema.parse(args ?? {});
+                const link = await store.addLink(p);
+                return { content: [{ type: 'text', text: JSON.stringify(link, null, 2) }] };
+              }
+              case 'link_list': {
+                const p = LinkListSchema.parse(args ?? {});
+                const links = await store.listLinks(p);
+                return { content: [{ type: 'text', text: JSON.stringify(links, null, 2) }] };
+              }
+              case 'run_start': {
+                const p = RunStartSchema.parse(args ?? {});
+                const run = await store.startRun(p.name);
+                return { content: [{ type: 'text', text: JSON.stringify(run, null, 2) }] };
+              }
+              case 'run_step': {
+                const p = RunStepSchema.parse(args ?? {});
+                const step = await store.addRunStep(p.runId, { kind: p.kind, message: p.message, data: p.data });
+                return { content: [{ type: 'text', text: JSON.stringify(step, null, 2) }] };
+              }
+              case 'run_complete': {
+                const p = RunCompleteSchema.parse(args ?? {});
+                const run = await store.completeRun(p.runId, p.status);
+                return { content: [{ type: 'text', text: JSON.stringify(run, null, 2) }] };
+              }
 
-        // Connectors
-        case 'figma_import': {
-          const fileKey = z.object({ fileKey: z.string().trim().min(1) }).parse(args ?? {}).fileKey;
-          const result = await figmaImport({ fileKey, store, env });
-          return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
-        }
-        case 'github_put_file': {
-          const p = z
-            .object({
-              owner: z.string().trim().min(1),
-              repo: z.string().trim().min(1),
-              path: z.string().trim().min(1),
-              content: z.string(),
-              message: z.string().trim().min(1),
-              branch: z.string().trim().min(1),
-            })
-            .parse(args ?? {});
-          const result = await githubPutFile({ ...p, store, env });
-          return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
-        }
-        case 'github_create_pr': {
-          const p = z
-            .object({
-              owner: z.string().trim().min(1),
-              repo: z.string().trim().min(1),
-              head: z.string().trim().min(1),
-              base: z.string().trim().min(1),
-              title: z.string().trim().min(1),
-              body: z.string().optional(),
-            })
-            .parse(args ?? {});
-          const result = await githubCreatePullRequest({ ...p, store, env });
-          return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
-        }
-        case 'confluence_upsert_page': {
-          const p = z
-            .object({
-              spaceKey: z.string().trim().min(1),
-              title: z.string().trim().min(1),
-              bodyHtml: z.string().min(1),
-            })
-            .parse(args ?? {});
-          const result = await confluenceUpsertPage({ ...p, store, env });
-          return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
-        }
-        case 'slack_post_message': {
-          const p = z
-            .object({
-              channel: z.string().trim().min(1),
-              text: z.string().min(1),
-            })
-            .parse(args ?? {});
-          const result = await slackPostMessage({ ...p, store, env });
-          return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
-        }
+              // Connectors
+              case 'figma_import': {
+                const fileKey = z.object({ fileKey: z.string().trim().min(1) }).parse(args ?? {}).fileKey;
+                const result = await figmaImport({ fileKey, store, env });
+                return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
+              }
+              case 'github_put_file': {
+                const p = z
+                  .object({
+                    owner: z.string().trim().min(1),
+                    repo: z.string().trim().min(1),
+                    path: z.string().trim().min(1),
+                    content: z.string(),
+                    message: z.string().trim().min(1),
+                    branch: z.string().trim().min(1),
+                  })
+                  .parse(args ?? {});
+                const result = await githubPutFile({ ...p, store, env });
+                return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
+              }
+              case 'github_create_pr': {
+                const p = z
+                  .object({
+                    owner: z.string().trim().min(1),
+                    repo: z.string().trim().min(1),
+                    head: z.string().trim().min(1),
+                    base: z.string().trim().min(1),
+                    title: z.string().trim().min(1),
+                    body: z.string().optional(),
+                  })
+                  .parse(args ?? {});
+                const result = await githubCreatePullRequest({ ...p, store, env });
+                return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
+              }
+              case 'confluence_upsert_page': {
+                const p = z
+                  .object({
+                    spaceKey: z.string().trim().min(1),
+                    title: z.string().trim().min(1),
+                    bodyHtml: z.string().min(1),
+                  })
+                  .parse(args ?? {});
+                const result = await confluenceUpsertPage({ ...p, store, env });
+                return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
+              }
+              case 'slack_post_message': {
+                const p = z
+                  .object({
+                    channel: z.string().trim().min(1),
+                    text: z.string().min(1),
+                  })
+                  .parse(args ?? {});
+                const result = await slackPostMessage({ ...p, store, env });
+                return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
+              }
 
-        // Gamma
-        case 'gamma_generate': {
-          const result = await gammaGenerate({ params: args as any, store, env });
-          return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
-        }
-        case 'gamma_get_status': {
-          const { generationId } = z.object({ generationId: z.string() }).parse(args ?? {});
-          const result = await gammaGetStatus({ generationId, env });
-          return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
-        }
-        case 'gamma_get_themes': {
-          const result = await gammaGetThemes({ env });
-          return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
-        }
+              // Gamma
+              case 'gamma_generate': {
+                const result = await gammaGenerate({ params: args as any, store, env });
+                return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
+              }
+              case 'gamma_get_status': {
+                const { generationId } = z.object({ generationId: z.string() }).parse(args ?? {});
+                const result = await gammaGetStatus({ generationId, env });
+                return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
+              }
+              case 'gamma_get_themes': {
+                const result = await gammaGetThemes({ env });
+                return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
+              }
 
-        default:
-          throw new McpError(ErrorCode.MethodNotFound, `Unknown tool: ${name}`);
-      }
+              default:
+                throw new McpError(ErrorCode.MethodNotFound, `Unknown tool: ${name}`);
+            }
+          })(),
+          15000, // 15s hard timeout
+          `Tool execution for '${name}' timed out after 15s`
+        );
+      });
+
+      breaker.recordSuccess();
+      return result;
     } catch (error) {
       if (error instanceof z.ZodError) {
         throw new McpError(
@@ -520,6 +546,10 @@ export function registerTools(server: Server, store: HubStore, env: Env) {
           `Invalid parameters: ${error.issues.map((e) => `${e.path.join('.') || 'root'}: ${e.message}`).join(', ')}`
         );
       }
+      
+      // Record failure for the circuit breaker
+      breaker.recordFailure();
+
       if (error instanceof McpError) {
         throw error;
       }
