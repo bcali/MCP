@@ -1,96 +1,47 @@
-# mcp-servers
+# MCP Servers Monorepo
 
-This repo contains two Node.js Model Context Protocol (MCP) servers:
+[![Build & Push mcp-hub](https://github.com/bcali/MCP/actions/workflows/mcp-hub-container.yml/badge.svg)](https://github.com/bcali/MCP/actions/workflows/mcp-hub-container.yml)
+[![Deploy-CloudRun](https://github.com/bcali/MCP/actions/workflows/mcp-hub-cloudrun.yml/badge.svg)](https://github.com/bcali/MCP/actions/workflows/mcp-hub-cloudrun.yml)
 
-- **`mcp-hub/`**: Cloud-hosted MCP gateway with shared state (memory/artifacts/links/runs) and connectors (Figma/GitHub/Confluence/Slack).
-- **`gamma-mcp-server/`**: MCP server for the Gamma Generate API.
+A collection of high-performance Model Context Protocol (MCP) servers designed for both local and cloud-hosted environments.
 
-## Deploy `mcp-hub` to the cloud (recommended: Cloud Run)
+## 🚀 Projects
 
-`mcp-hub` is built to run behind a single HTTPS endpoint and expose MCP over HTTP:
+### 🌩️ [MCP Hub](./mcp-hub)
+A production-ready **Cloud MCP Gateway** that centralizes access to multiple tools and provides persistent state (memory, artifacts, and runs).
+- **Core Primitives**: Centralized `memory`, `artifacts`, and durable `runs`.
+- **Connectors**: Built-in integration for **Figma**, **GitHub**, **Confluence**, and **Slack**.
+- **Cloud Native**: Designed for Google Cloud Run with SSE support and session affinity.
+- **Persistent**: Backed by Postgres (Supabase) for durable cross-session memory.
 
-- **Health**: `/healthz`
-- **MCP (SSE)**: `/v1/sse` (recommended for `mcp-remote`)
-- **MCP (HTTP)**: `/mcp`
+### 🎨 [Gamma MCP Server](./gamma-mcp-server)
+An MCP server for the [Gamma Generate API](https://developers.gamma.app).
+- **Automated Design**: Generate presentations, documents, and social cards directly from your AI assistant.
+- **Full Control**: Detailed imagery, layout, and theme customization via MCP tools.
 
-Both `/v1/sse` and `/mcp` are protected by an API key.
+---
 
-### Required environment variables (production)
+## 🛠️ Quick Start (Cloud Hub)
 
-- `MCP_HUB_API_KEY`: shared key clients pass via `?key=...` (or Authorization header if your client supports it)
-- `DATABASE_URL`: Postgres connection string (Supabase is fine)
+### 1. Connect Cursor to your Cloud Hub
+Add a new **SSE** server in Cursor Settings (`Ctrl+Shift+J`):
+- **Name**: `hub`
+- **URL**: `https://mcp-hub-6jzkdzuf2a-uc.a.run.app/v1/sse?key=YOUR_API_KEY`
 
-Optional (connectors / storage):
+### 2. Deploy your own
+See the [mcp-hub deployment guide](./mcp-hub#deployment) for instructions on setting up your own instance on Google Cloud Run.
 
-- `FIGMA_TOKEN`
-- `GITHUB_TOKEN`
-- `ATLASSIAN_EMAIL`, `ATLASSIAN_API_TOKEN`, `CONFLUENCE_BASE_URL`
-- `SLACK_BOT_TOKEN`
-- `R2_ENDPOINT`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET`, `R2_REGION`
+---
 
-### Build & push container image (GitHub Actions → GHCR)
+## 📦 Repository Structure
 
-This repo includes a workflow that builds `mcp-hub` and pushes it to GHCR on every push to `main`:
-
-- Image: `ghcr.io/<OWNER>/<REPO>/mcp-hub:latest`
-
-Make sure **GitHub Packages** is enabled for the repo (GHCR).
-
-### Deploy to Cloud Run (using the GHCR image)
-
-1. Create a Cloud Run service (first deploy):
-
-```bash
-gcloud run deploy mcp-hub \
-  --image ghcr.io/<OWNER>/<REPO>/mcp-hub:latest \
-  --region us-central1 \
-  --platform managed \
-  --allow-unauthenticated \
-  --set-env-vars MCP_HUB_API_KEY="YOUR_KEY",DATABASE_URL="postgresql://...",HOST="0.0.0.0",PORT="8080"
+```text
+.
+├── .github/workflows/      # CI/CD Pipelines
+├── gamma-mcp-server/       # Gamma API Integration
+├── mcp-hub/                # Cloud Gateway & State Hub
+└── README.md               # You are here
 ```
 
-2. (Recommended) Set Cloud Run **min instances = 1** to avoid cold starts for SSE.
-
-### Optional: Deploy to Cloud Run from GitHub Actions (no local deploy)
-
-This repo includes an **optional** workflow: `.github/workflows/mcp-hub-cloudrun.yml`.
-
-It’s guarded and will only run after you add these **repo secrets**:
-
-- `GCP_WIF_PROVIDER`
-- `GCP_SERVICE_ACCOUNT`
-- `GCP_PROJECT_ID`
-- `GCP_REGION`
-- `CLOUD_RUN_SERVICE`
-- `MCP_HUB_API_KEY`
-- `DATABASE_URL`
-
-Then it will deploy on push to `main` (and can also be run manually).
-
-### Cursor `mcp.json` example
-
-```json
-{
-  "mcpServers": {
-    "hub": {
-      "command": "mcp-remote",
-      "args": ["https://YOUR_CLOUD_RUN_URL/v1/sse?key=YOUR_MCP_HUB_API_KEY"]
-    }
-  }
-}
-```
-
-## Publishing this repo to GitHub
-
-From the repo root:
-
-```bash
-git init
-git add .
-git commit -m "Initial commit"
-git branch -M main
-git remote add origin git@github.com:<OWNER>/<REPO>.git
-git push -u origin main
-```
-
-
+## 📜 License
+MIT © 2025 bcali

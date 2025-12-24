@@ -1,133 +1,68 @@
 # MCP Hub (Cloud MCP Gateway)
 
-One **cloud-hosted** MCP server that centralizes tool access (Figma, GitHub, Confluence, Slack, Gamma, etc.) and enables **shared state** (memory/artifacts/links/runs) across all connected platforms.
+A centralized, cloud-hosted MCP server that provides shared state and platform connectors across all your AI assistant sessions.
 
-## Why this exists
+## 🌟 Why MCP Hub?
 
-Instead of running many separate MCP servers (each with its own state), this hub becomes the single endpoint your clients connect to. Tools share:
+Instead of managing separate MCP servers for every tool, the Hub becomes your single point of entry. It enables:
 
-- **Artifacts**: design exports, docs, code patches, etc.
-- **Links**: typed relationships between objects (Figma ↔ PR ↔ Confluence, etc.)
-- **Runs**: durable workflow logs for end-to-end traceability
-- **Memory**: requirements/notes/decisions, centrally searchable
+- **🧠 Shared Memory**: Persistent requirements, decisions, and notes searchable across chats.
+- **📄 Artifact Management**: Durable storage for generated docs, code patches, and design exports.
+- **🔗 Typed Linking**: Create relationships between objects (e.g., Figma File ↔ PR ↔ Confluence Page).
+- **🛤️ Durable Runs**: End-to-end traceability for complex autonomous workflows.
 
-## Local run
+## 🔌 Built-in Connectors
 
-1. Copy `.env.example` → `.env`
-2. Set `MCP_HUB_API_KEY`
-3. Set `DATABASE_URL` (Supabase Postgres)
-3. Start dev server:
+| Service | Tools |
+| :--- | :--- |
+| **GitHub** | `github_put_file`, `github_create_pr` |
+| **Slack** | `slack_post_message` |
+| **Confluence** | `confluence_upsert_page` |
+| **Figma** | `figma_import` |
 
-```bash
-npm install
-npm run dev
-```
+## 🚀 Deployment
 
-## Supabase setup (Postgres)
+The Hub is designed to be deployed as a container on **Google Cloud Run**.
 
-You’ll need a Supabase account + a project (free tier is fine).
+### Prerequisites
+- A Google Cloud Project
+- A Postgres Database (e.g., [Supabase](https://supabase.com))
+- (Optional) Cloudflare R2 for large artifact storage
 
-1. Create a project in Supabase.
-2. Go to **Project Settings → Database** and copy the **Connection string** (URI).
-3. Put it in `.env` as `DATABASE_URL` and ensure SSL is required (Supabase typically uses `sslmode=require`).
+### Required Environment Variables
+- `MCP_HUB_API_KEY`: Your secret key for client authentication.
+- `DATABASE_URL`: Postgres connection string.
+- `PORT`: 8080 (handled by Cloud Run).
+- `HOST`: 0.0.0.0.
 
-Example:
+### Automated Deploy (GitHub Actions)
+This repository includes a CI/CD pipeline that deploys to Cloud Run on every push to `main`. To use it, set the following secrets in your GitHub repository:
+- `GCP_WIF_PROVIDER`: Workload Identity Provider resource name.
+- `GCP_SERVICE_ACCOUNT`: Deployment service account email.
+- `GCP_PROJECT_ID`: Your GCP Project ID.
+- `GCP_REGION`: e.g., `us-central1`.
+- `CLOUD_RUN_SERVICE`: e.g., `mcp-hub`.
+- `MCP_HUB_API_KEY`: Your chosen API key.
+- `DATABASE_URL`: Your Supabase URI.
 
-`postgresql://postgres:<PASSWORD>@db.<PROJECT_REF>.supabase.co:5432/postgres?sslmode=require`
+## 💻 Local Development
 
-## Cursor integration (recommended)
+1. **Setup Environment**:
+   ```bash
+   cp .env.example .env
+   # Edit .env with your keys
+   ```
 
-You already use `mcp-remote` for Atlassian SSE. Do the same for this hub.
+2. **Install & Run**:
+   ```bash
+   npm install
+   npm run dev
+   ```
 
-Example `mcp.json` entry:
+## 🛠️ Architecture Notes
+- **SSE Transport**: Uses standard Server-Sent Events for high compatibility.
+- **Session Affinity**: Required for Cloud Run to ensure POST commands reach the correct established SSE stream.
+- **Stateless Core**: All state is offloaded to Postgres and R2.
 
-```json
-{
-  "mcpServers": {
-    "hub": {
-      "command": "mcp-remote",
-      "args": ["https://YOUR_DOMAIN/v1/sse?key=YOUR_MCP_HUB_API_KEY"]
-    }
-  }
-}
-```
-
-## Deployed hosting (Cloud Run)
-
-This repo is designed to be deployed as a container.
-
-High-level flow:
-
-- Build & push container
-- Deploy to Cloud Run
-- Set env vars (especially `MCP_HUB_API_KEY`)
-- Put Cloudflare Access (GitHub SSO) in front (optional; recommended)
-
-### One-time deploy (manual)
-
-```bash
-# From repo root
-gcloud run deploy mcp-hub \
-  --source . \
-  --region us-central1 \
-  --allow-unauthenticated \
-  --set-env-vars MCP_HUB_API_KEY="YOUR_KEY",HOST="0.0.0.0",PORT="8080"
-```
-
-Notes:
-- You can keep `--allow-unauthenticated` on Cloud Run and enforce access at the edge (Cloudflare Access),
-  or lock Cloud Run down and use a private ingress. For a single-user setup, Cloudflare Access is usually the cleanest.
-- For reliability, set **min instances = 1** (small monthly cost, avoids cold starts).
-
-## Cloudflare R2 setup (optional, for large artifacts)
-
-You’ll need a Cloudflare account. R2 generally requires adding a payment method.
-
-1. Create an R2 bucket (e.g. `mcp-hub`)
-2. Create an R2 API token / access keys
-3. Configure:
-   - `R2_ENDPOINT`
-   - `R2_ACCESS_KEY_ID`
-   - `R2_SECRET_ACCESS_KEY`
-   - `R2_BUCKET`
-
-If R2 is not configured, artifacts will still work; large bodies will remain in Postgres.
-
-## Tools (current)
-
-### Shared primitives
-
-- `memory_put`, `memory_get`, `memory_search`
-- `artifact_create`, `artifact_get`, `artifact_list`
-- `link_add`, `link_list`
-- `run_start`, `run_step`, `run_complete`
-
-### Connectors (initial)
-
-- `figma_import` (requires `FIGMA_TOKEN`)
-- `github_put_file`, `github_create_pr` (requires `GITHUB_TOKEN`)
-- `confluence_upsert_page` (requires `ATLASSIAN_EMAIL`, `ATLASSIAN_API_TOKEN`, `CONFLUENCE_BASE_URL`)
-- `slack_post_message` (requires `SLACK_BOT_TOKEN`)
-
-## Notes
-
-This initial version uses **in-memory** storage for the shared primitives. Next step is swapping in persistent storage (Postgres + object storage) so state survives restarts and supports long-lived workflows.
-
-# Name
-### mcp-hub
-
-# Synopsis
-
-
-# Description
-
-# Example
-
-# Install:
-`npm install mcp-hub`
-
-# Test:
-`npm test`
-
-#License:
-ISC
+## 📜 License
+MIT
