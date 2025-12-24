@@ -4,6 +4,7 @@ export type IsoDateTime = string;
 
 export interface MemoryItem {
   id: string;
+  eventId?: string;
   key: string;
   value: string;
   tags: string[];
@@ -13,6 +14,7 @@ export interface MemoryItem {
 
 export interface Artifact {
   id: string;
+  eventId?: string;
   type: string;
   name?: string;
   source?: string;
@@ -24,6 +26,7 @@ export interface Artifact {
 
 export interface Link {
   id: string;
+  eventId?: string;
   from: { type: string; id: string };
   to: { type: string; id: string };
   label?: string;
@@ -33,6 +36,7 @@ export interface Link {
 
 export interface RunStep {
   id: string;
+  eventId?: string;
   ts: IsoDateTime;
   kind: 'note' | 'tool_call' | 'artifact' | 'link';
   message: string;
@@ -41,6 +45,7 @@ export interface RunStep {
 
 export interface Run {
   id: string;
+  eventId?: string;
   name: string;
   status: 'running' | 'completed' | 'failed';
   createdAt: IsoDateTime;
@@ -68,23 +73,34 @@ export class HubState {
   private links = new Map<string, Link>();
   private runs = new Map<string, Run>();
   private connections = new Map<string, Connection>();
+  private eventIds = new Set<string>();
 
-  upsertMemory(key: string, value: string, tags: string[] = []) {
+  upsertMemory(key: string, value: string, tags: string[] = [], eventId?: string) {
+    if (eventId && this.eventIds.has(eventId)) {
+      return [...this.memoryByKey.values()].find(m => m.eventId === eventId)!;
+    }
+
     const existing = this.memoryByKey.get(key);
     const ts = nowIso();
     if (existing) {
       const updated: MemoryItem = { ...existing, value, tags, updatedAt: ts };
+      if (eventId) {
+        updated.eventId = eventId;
+        this.eventIds.add(eventId);
+      }
       this.memoryByKey.set(key, updated);
       return updated;
     }
     const created: MemoryItem = {
       id: randomUUID(),
+      eventId,
       key,
       value,
       tags,
       createdAt: ts,
       updatedAt: ts,
     };
+    if (eventId) this.eventIds.add(eventId);
     this.memoryByKey.set(key, created);
     return created;
   }
@@ -106,11 +122,16 @@ export class HubState {
   }
 
   createArtifact(input: Omit<Artifact, 'id' | 'createdAt'>) {
+    if (input.eventId && this.eventIds.has(input.eventId)) {
+      return [...this.artifacts.values()].find(a => a.eventId === input.eventId)!;
+    }
+
     const artifact: Artifact = {
       id: randomUUID(),
       createdAt: nowIso(),
       ...input,
     };
+    if (input.eventId) this.eventIds.add(input.eventId);
     this.artifacts.set(artifact.id, artifact);
     return artifact;
   }
@@ -125,11 +146,16 @@ export class HubState {
   }
 
   addLink(input: Omit<Link, 'id' | 'createdAt'>) {
+    if (input.eventId && this.eventIds.has(input.eventId)) {
+      return [...this.links.values()].find(l => l.eventId === input.eventId)!;
+    }
+
     const link: Link = {
       id: randomUUID(),
       createdAt: nowIso(),
       ...input,
     };
+    if (input.eventId) this.eventIds.add(input.eventId);
     this.links.set(link.id, link);
     return link;
   }
@@ -146,26 +172,38 @@ export class HubState {
     });
   }
 
-  startRun(name: string) {
+  startRun(name: string, eventId?: string) {
+    if (eventId && this.eventIds.has(eventId)) {
+      return [...this.runs.values()].find(r => r.eventId === eventId)!;
+    }
+
     const ts = nowIso();
     const run: Run = {
       id: randomUUID(),
+      eventId,
       name,
       status: 'running',
       createdAt: ts,
       updatedAt: ts,
       steps: [],
     };
+    if (eventId) this.eventIds.add(eventId);
     this.runs.set(run.id, run);
     return run;
   }
 
   addRunStep(runId: string, step: Omit<RunStep, 'id' | 'ts'>) {
+    if (step.eventId && this.eventIds.has(step.eventId)) {
+      const run = this.runs.get(runId);
+      if (run) return run.steps.find(s => s.eventId === step.eventId)!;
+    }
+
     const run = this.runs.get(runId);
     if (!run) {
       throw new Error(`Run not found: ${runId}`);
     }
     const s: RunStep = { id: randomUUID(), ts: nowIso(), ...step };
+    if (step.eventId) this.eventIds.add(step.eventId);
     run.steps.push(s);
     run.updatedAt = nowIso();
     this.runs.set(run.id, run);

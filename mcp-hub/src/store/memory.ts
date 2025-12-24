@@ -5,8 +5,8 @@ import type { ArtifactCreateInput, HubStore, LinkAddInput, LinkListFilter } from
 export class MemoryStore implements HubStore {
   private state = new HubState();
 
-  async upsertMemory(key: string, value: string, tags: string[]): Promise<MemoryItem> {
-    return this.state.upsertMemory(key, value, tags);
+  async upsertMemory(key: string, value: string, tags: string[], eventId?: string): Promise<MemoryItem> {
+    return this.state.upsertMemory(key, value, tags, eventId);
   }
 
   async getMemory(key: string): Promise<MemoryItem | null> {
@@ -37,11 +37,11 @@ export class MemoryStore implements HubStore {
     return this.state.listLinks(filter);
   }
 
-  async startRun(name: string): Promise<Run> {
-    return this.state.startRun(name);
+  async startRun(name: string, eventId?: string): Promise<Run> {
+    return this.state.startRun(name, eventId);
   }
 
-  async addRunStep(runId: string, step: Omit<RunStep, 'id' | 'ts'>): Promise<RunStep> {
+  async addRunStep(runId: string, step: Omit<RunStep, 'id' | 'ts'> & { eventId?: string }): Promise<RunStep> {
     return this.state.addRunStep(runId, step);
   }
 

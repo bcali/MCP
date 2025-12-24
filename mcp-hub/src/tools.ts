@@ -9,6 +9,7 @@ import type { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { z } from 'zod';
 import type { Env } from './config.js';
 import type { HubStore } from './store/types.js';
+import { generateEventId } from './utils/id.js';
 import { ResilienceRegistry, withTimeout } from './utils/resilience.js';
 import { figmaImport } from './tools/figma.js';
 import { githubCreatePullRequest, githubPutFile } from './tools/github.js';
@@ -35,6 +36,8 @@ export const STATIC_TOOLS: Tool[] = [
         key: { type: 'string' },
         value: { type: 'string' },
         tags: { type: 'array', items: { type: 'string' } },
+        source: { type: 'string', description: 'Origin of the event' },
+        source_event_id: { type: 'string', description: 'Original ID from the source' },
       },
       required: ['key', 'value'],
     },
@@ -71,6 +74,8 @@ export const STATIC_TOOLS: Tool[] = [
         contentType: { type: 'string' },
         contentText: { type: 'string' },
         metadata: { type: 'object' },
+        source: { type: 'string', description: 'Origin of the event' },
+        source_event_id: { type: 'string', description: 'Original ID from the source' },
       },
       required: ['type'],
     },
@@ -110,6 +115,8 @@ export const STATIC_TOOLS: Tool[] = [
         },
         label: { type: 'string' },
         url: { type: 'string' },
+        source: { type: 'string', description: 'Origin of the event' },
+        source_event_id: { type: 'string', description: 'Original ID from the source' },
       },
       required: ['from', 'to'],
     },
@@ -132,7 +139,11 @@ export const STATIC_TOOLS: Tool[] = [
     description: 'Start a workflow run (useful for multi-step automation and traceability)',
     inputSchema: {
       type: 'object',
-      properties: { name: { type: 'string' } },
+      properties: {
+        name: { type: 'string' },
+        source: { type: 'string' },
+        source_event_id: { type: 'string' },
+      },
       required: ['name'],
     },
   },
@@ -146,6 +157,8 @@ export const STATIC_TOOLS: Tool[] = [
         kind: { type: 'string', enum: ['note', 'tool_call', 'artifact', 'link'] },
         message: { type: 'string' },
         data: { type: 'object' },
+        source: { type: 'string' },
+        source_event_id: { type: 'string' },
       },
       required: ['runId', 'kind', 'message'],
     },
@@ -305,6 +318,8 @@ export function registerTools(server: Server, store: HubStore, env: Env) {
     key: z.string().trim().min(1),
     value: z.string().min(1),
     tags: z.array(z.string().trim().min(1)).optional(),
+    source: z.string().optional(),
+    source_event_id: z.string().optional(),
   });
 
   const MemoryGetSchema = z.object({
@@ -323,6 +338,7 @@ export function registerTools(server: Server, store: HubStore, env: Env) {
     contentType: z.string().trim().min(1).optional(),
     contentText: z.string().optional(),
     metadata: z.record(z.string(), z.unknown()).optional(),
+    source_event_id: z.string().optional(),
   });
 
   const ArtifactGetSchema = z.object({
@@ -338,6 +354,8 @@ export function registerTools(server: Server, store: HubStore, env: Env) {
     to: z.object({ type: z.string().trim().min(1), id: z.string().trim().min(1) }),
     label: z.string().trim().min(1).optional(),
     url: z.string().trim().min(1).optional(),
+    source: z.string().optional(),
+    source_event_id: z.string().optional(),
   });
 
   const LinkListSchema = z.object({
@@ -349,6 +367,8 @@ export function registerTools(server: Server, store: HubStore, env: Env) {
 
   const RunStartSchema = z.object({
     name: z.string().trim().min(1),
+    source: z.string().optional(),
+    source_event_id: z.string().optional(),
   });
 
   const RunStepSchema = z.object({
@@ -356,6 +376,8 @@ export function registerTools(server: Server, store: HubStore, env: Env) {
     kind: z.enum(['note', 'tool_call', 'artifact', 'link']),
     message: z.string().min(1),
     data: z.record(z.string(), z.unknown()).optional(),
+    source: z.string().optional(),
+    source_event_id: z.string().optional(),
   });
 
   const RunCompleteSchema = z.object({
@@ -403,7 +425,8 @@ export function registerTools(server: Server, store: HubStore, env: Env) {
             switch (name) {
               case 'memory_put': {
                 const p = MemoryPutSchema.parse(args ?? {});
-                const item = await store.upsertMemory(p.key, p.value, p.tags ?? []);
+                const eventId = (p.source && p.source_event_id) ? generateEventId(p.source, p.source_event_id) : undefined;
+                const item = await store.upsertMemory(p.key, p.value, p.tags ?? [], eventId);
                 return { content: [{ type: 'text', text: JSON.stringify(item, null, 2) }] };
               }
               case 'memory_get': {
@@ -418,7 +441,8 @@ export function registerTools(server: Server, store: HubStore, env: Env) {
               }
               case 'artifact_create': {
                 const p = ArtifactCreateSchema.parse(args ?? {});
-                const artifact = await store.createArtifact(p);
+                const eventId = (p.source && p.source_event_id) ? generateEventId(p.source, p.source_event_id) : undefined;
+                const artifact = await store.createArtifact({ ...p, eventId });
                 return { content: [{ type: 'text', text: JSON.stringify(artifact, null, 2) }] };
               }
               case 'artifact_get': {
@@ -433,7 +457,8 @@ export function registerTools(server: Server, store: HubStore, env: Env) {
               }
               case 'link_add': {
                 const p = LinkAddSchema.parse(args ?? {});
-                const link = await store.addLink(p);
+                const eventId = (p.source && p.source_event_id) ? generateEventId(p.source, p.source_event_id) : undefined;
+                const link = await store.addLink({ ...p, eventId });
                 return { content: [{ type: 'text', text: JSON.stringify(link, null, 2) }] };
               }
               case 'link_list': {
@@ -443,12 +468,14 @@ export function registerTools(server: Server, store: HubStore, env: Env) {
               }
               case 'run_start': {
                 const p = RunStartSchema.parse(args ?? {});
-                const run = await store.startRun(p.name);
+                const eventId = (p.source && p.source_event_id) ? generateEventId(p.source, p.source_event_id) : undefined;
+                const run = await store.startRun(p.name, eventId);
                 return { content: [{ type: 'text', text: JSON.stringify(run, null, 2) }] };
               }
               case 'run_step': {
                 const p = RunStepSchema.parse(args ?? {});
-                const step = await store.addRunStep(p.runId, { kind: p.kind, message: p.message, data: p.data });
+                const eventId = (p.source && p.source_event_id) ? generateEventId(p.source, p.source_event_id) : undefined;
+                const step = await store.addRunStep(p.runId, { kind: p.kind, message: p.message, data: p.data, eventId });
                 return { content: [{ type: 'text', text: JSON.stringify(step, null, 2) }] };
               }
               case 'run_complete': {

@@ -7,6 +7,7 @@ export interface ArtifactCreateInput {
   contentType?: string;
   contentText?: string;
   metadata?: Record<string, unknown>;
+  eventId?: string;
 }
 
 export interface LinkAddInput {
@@ -14,6 +15,7 @@ export interface LinkAddInput {
   to: { type: string; id: string };
   label?: string;
   url?: string;
+  eventId?: string;
 }
 
 export interface LinkListFilter {
@@ -25,7 +27,7 @@ export interface LinkListFilter {
 
 export interface HubStore {
   // Memory
-  upsertMemory(key: string, value: string, tags: string[]): Promise<MemoryItem>;
+  upsertMemory(key: string, value: string, tags: string[], eventId?: string): Promise<MemoryItem>;
   getMemory(key: string): Promise<MemoryItem | null>;
   searchMemory(query: string, tags?: string[]): Promise<MemoryItem[]>;
 
@@ -39,8 +41,8 @@ export interface HubStore {
   listLinks(filter?: LinkListFilter): Promise<Link[]>;
 
   // Runs
-  startRun(name: string): Promise<Run>;
-  addRunStep(runId: string, step: Omit<RunStep, 'id' | 'ts'>): Promise<RunStep>;
+  startRun(name: string, eventId?: string): Promise<Run>;
+  addRunStep(runId: string, step: Omit<RunStep, 'id' | 'ts'> & { eventId?: string }): Promise<RunStep>;
   completeRun(runId: string, status: 'completed' | 'failed'): Promise<Run>;
   getRun(runId: string): Promise<Run | null>;
   listRuns(limit?: number): Promise<Run[]>;

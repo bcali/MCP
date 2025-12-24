@@ -21,6 +21,7 @@ export async function migrate(pool: Pool) {
   await pool.query(`
     create table if not exists hub_memory (
       id uuid primary key,
+      event_id text unique,
       key text unique not null,
       value text not null,
       tags text[] not null default '{}',
@@ -29,11 +30,13 @@ export async function migrate(pool: Pool) {
     );
 
     create index if not exists hub_memory_key_idx on hub_memory (key);
+    create index if not exists hub_memory_event_id_idx on hub_memory (event_id);
   `);
 
   await pool.query(`
     create table if not exists hub_artifacts (
       id uuid primary key,
+      event_id text unique,
       type text not null,
       name text,
       source text,
@@ -45,11 +48,13 @@ export async function migrate(pool: Pool) {
     );
 
     create index if not exists hub_artifacts_type_idx on hub_artifacts (type);
+    create index if not exists hub_artifacts_event_id_idx on hub_artifacts (event_id);
   `);
 
   await pool.query(`
     create table if not exists hub_links (
       id uuid primary key,
+      event_id text unique,
       from_type text not null,
       from_id text not null,
       to_type text not null,
@@ -61,11 +66,13 @@ export async function migrate(pool: Pool) {
 
     create index if not exists hub_links_from_idx on hub_links (from_type, from_id);
     create index if not exists hub_links_to_idx on hub_links (to_type, to_id);
+    create index if not exists hub_links_event_id_idx on hub_links (event_id);
   `);
 
   await pool.query(`
     create table if not exists hub_runs (
       id uuid primary key,
+      event_id text unique,
       name text not null,
       status text not null,
       created_at timestamptz not null default now(),
@@ -73,11 +80,13 @@ export async function migrate(pool: Pool) {
     );
 
     create index if not exists hub_runs_status_idx on hub_runs (status);
+    create index if not exists hub_runs_event_id_idx on hub_runs (event_id);
   `);
 
   await pool.query(`
     create table if not exists hub_run_steps (
       id uuid primary key,
+      event_id text unique,
       run_id uuid not null references hub_runs(id) on delete cascade,
       ts timestamptz not null default now(),
       kind text not null,
@@ -86,6 +95,7 @@ export async function migrate(pool: Pool) {
     );
 
     create index if not exists hub_run_steps_run_idx on hub_run_steps (run_id, ts);
+    create index if not exists hub_run_steps_event_id_idx on hub_run_steps (event_id);
   `);
 
   await pool.query(`
@@ -111,17 +121,17 @@ export class PostgresStore implements HubStore {
     private blobs: BlobStore | null
   ) {}
 
-  async upsertMemory(key: string, value: string, tags: string[]): Promise<MemoryItem> {
+  async upsertMemory(key: string, value: string, tags: string[], eventId?: string): Promise<MemoryItem> {
     const id = randomUUID();
     const res = await this.pool.query(
       `
-      insert into hub_memory (id, key, value, tags)
-      values ($1, $2, $3, $4)
+      insert into hub_memory (id, key, value, tags, event_id)
+      values ($1, $2, $3, $4, $5)
       on conflict (key)
       do update set value = excluded.value, tags = excluded.tags, updated_at = now()
       returning id::text, key, value, tags, created_at, updated_at;
       `,
-      [id, key, value, tags]
+      [id, key, value, tags, eventId ?? null]
     );
     const row = res.rows[0] as any;
     return {
@@ -194,11 +204,13 @@ export class PostgresStore implements HubStore {
 
     await this.pool.query(
       `
-      insert into hub_artifacts (id, type, name, source, content_type, content_text, content_r2_key, metadata, created_at)
-      values ($1, $2, $3, $4, $5, $6, $7, $8::jsonb, $9)
+      insert into hub_artifacts (id, event_id, type, name, source, content_type, content_text, content_r2_key, metadata, created_at)
+      values ($1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb, $10)
+      on conflict (event_id) do nothing
       `,
       [
         id,
+        input.eventId ?? null,
         input.type,
         input.name ?? null,
         input.source ?? null,
@@ -277,10 +289,11 @@ export class PostgresStore implements HubStore {
 
     await this.pool.query(
       `
-      insert into hub_links (id, from_type, from_id, to_type, to_id, label, url, created_at)
-      values ($1, $2, $3, $4, $5, $6, $7, $8)
+      insert into hub_links (id, event_id, from_type, from_id, to_type, to_id, label, url, created_at)
+      values ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+      on conflict (event_id) do nothing
       `,
-      [id, input.from.type, input.from.id, input.to.type, input.to.id, input.label ?? null, input.url ?? null, createdAt]
+      [id, input.eventId ?? null, input.from.type, input.from.id, input.to.type, input.to.id, input.label ?? null, input.url ?? null, createdAt]
     );
 
     return {
@@ -319,25 +332,22 @@ export class PostgresStore implements HubStore {
     }));
   }
 
-  async startRun(name: string): Promise<Run> {
-    const id = randomUUID();
-    const ts = nowIso();
-    await this.pool.query(`insert into hub_runs (id, name, status, created_at, updated_at) values ($1, $2, $3, $4, $5)`, [
-      id,
-      name,
-      'running',
-      ts,
-      ts,
-    ]);
-    return { id, name, status: 'running', createdAt: ts, updatedAt: ts, steps: [] };
-  }
-
-  async addRunStep(runId: string, step: Omit<RunStep, 'id' | 'ts'>): Promise<RunStep> {
+  async startRun(name: string, eventId?: string): Promise<Run> {
     const id = randomUUID();
     const ts = nowIso();
     await this.pool.query(
-      `insert into hub_run_steps (id, run_id, ts, kind, message, data) values ($1, $2, $3, $4, $5, $6::jsonb)`,
-      [id, runId, ts, step.kind, step.message, step.data ? JSON.stringify(step.data) : null]
+      `insert into hub_runs (id, event_id, name, status, created_at, updated_at) values ($1, $2, $3, $4, $5, $6) on conflict (event_id) do nothing`,
+      [id, eventId ?? null, name, 'running', ts, ts]
+    );
+    return { id, name, status: 'running', createdAt: ts, updatedAt: ts, steps: [] };
+  }
+
+  async addRunStep(runId: string, step: Omit<RunStep, 'id' | 'ts'> & { eventId?: string }): Promise<RunStep> {
+    const id = randomUUID();
+    const ts = nowIso();
+    await this.pool.query(
+      `insert into hub_run_steps (id, event_id, run_id, ts, kind, message, data) values ($1, $2, $3, $4, $5, $6, $7::jsonb) on conflict (event_id) do nothing`,
+      [id, step.eventId ?? null, runId, ts, step.kind, step.message, step.data ? JSON.stringify(step.data) : null]
     );
     await this.pool.query(`update hub_runs set updated_at = now() where id = $1`, [runId]);
     return { id, ts, ...step };
