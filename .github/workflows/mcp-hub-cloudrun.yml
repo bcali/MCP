@@ -1,4 +1,4 @@
-name: Deploy mcp-hub to Cloud Run (optional)
+name: Deploy-CloudRun
 
 on:
   workflow_dispatch: {}
