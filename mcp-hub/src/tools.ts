@@ -13,8 +13,18 @@ import { figmaImport } from './tools/figma.js';
 import { githubCreatePullRequest, githubPutFile } from './tools/github.js';
 import { slackPostMessage } from './tools/slack.js';
 import { confluenceUpsertPage } from './tools/confluence.js';
+import { gammaGenerate, gammaGetStatus, gammaGetThemes } from './tools/gamma.js';
+import {
+  TEXT_MODES,
+  FORMATS,
+  TEXT_AMOUNTS,
+  IMAGE_SOURCES,
+  CARD_SPLITS,
+  EXPORT_TYPES,
+  CARD_DIMENSIONS,
+} from './tools/gamma-constants.js';
 
-export const TOOLS: Tool[] = [
+export const STATIC_TOOLS: Tool[] = [
   {
     name: 'memory_put',
     description: 'Store shared memory (notes/requirements/decisions) centrally in the hub',
@@ -220,6 +230,71 @@ export const TOOLS: Tool[] = [
       required: ['channel', 'text'],
     },
   },
+  {
+    name: 'gamma_generate',
+    description: 'Generate a presentation, document, or social content using Gamma AI',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        inputText: { type: 'string' },
+        textMode: { type: 'string', enum: [...TEXT_MODES] },
+        format: { type: 'string', enum: [...FORMATS] },
+        themeName: { type: 'string' },
+        numCards: { type: 'number' },
+        cardSplit: { type: 'string', enum: [...CARD_SPLITS] },
+        additionalInstructions: { type: 'string' },
+        exportAs: {
+          anyOf: [
+            { type: 'string', enum: [...EXPORT_TYPES] },
+            { type: 'array', items: { type: 'string', enum: [...EXPORT_TYPES] } },
+          ],
+        },
+        textOptions: {
+          type: 'object',
+          properties: {
+            amount: { type: 'string', enum: [...TEXT_AMOUNTS] },
+            tone: { type: 'string' },
+            audience: { type: 'string' },
+            language: { type: 'string' },
+          },
+        },
+        imageOptions: {
+          type: 'object',
+          properties: {
+            source: { type: 'string', enum: [...IMAGE_SOURCES] },
+            model: { type: 'string' },
+            style: { type: 'string' },
+          },
+        },
+        cardOptions: {
+          type: 'object',
+          properties: {
+            dimensions: { type: 'string', enum: [...CARD_DIMENSIONS] },
+          },
+        },
+      },
+      required: ['inputText'],
+    },
+  },
+  {
+    name: 'gamma_get_status',
+    description: 'Check the status of a Gamma generation request',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        generationId: { type: 'string' },
+      },
+      required: ['generationId'],
+    },
+  },
+  {
+    name: 'gamma_get_themes',
+    description: 'Get available themes for Gamma presentations',
+    inputSchema: {
+      type: 'object',
+      properties: {},
+    },
+  },
 ];
 
 export function registerTools(server: Server, store: HubStore, env: Env) {
@@ -285,9 +360,23 @@ export function registerTools(server: Server, store: HubStore, env: Env) {
     status: z.enum(['completed', 'failed']),
   });
 
-  server.setRequestHandler(ListToolsRequestSchema, async () => ({
-    tools: TOOLS,
-  }));
+  server.setRequestHandler(ListToolsRequestSchema, async () => {
+    const tools = [...STATIC_TOOLS];
+    
+    try {
+      const connections = await store.listConnections();
+      for (const conn of connections) {
+        if (conn.enabled && conn.type === 'SSE MCP Server') {
+          // For now, we just indicate in the description that more tools are available via this connection
+          // A full proxying implementation would fetch and merge them here.
+        }
+      }
+    } catch (e) {
+      console.error('[mcp-hub] Error fetching dynamic tools:', e);
+    }
+
+    return { tools };
+  });
 
   server.setRequestHandler(CallToolRequestSchema, async (request) => {
     const { name, arguments: args } = request.params;
@@ -403,6 +492,21 @@ export function registerTools(server: Server, store: HubStore, env: Env) {
             })
             .parse(args ?? {});
           const result = await slackPostMessage({ ...p, store, env });
+          return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
+        }
+
+        // Gamma
+        case 'gamma_generate': {
+          const result = await gammaGenerate({ params: args as any, store, env });
+          return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
+        }
+        case 'gamma_get_status': {
+          const { generationId } = z.object({ generationId: z.string() }).parse(args ?? {});
+          const result = await gammaGetStatus({ generationId, env });
+          return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
+        }
+        case 'gamma_get_themes': {
+          const result = await gammaGetThemes({ env });
           return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
         }
 

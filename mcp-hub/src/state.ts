@@ -48,6 +48,18 @@ export interface Run {
   steps: RunStep[];
 }
 
+export interface Connection {
+  id: string;
+  name: string;
+  type: string;
+  endpoint: string;
+  apiKey?: string;
+  enabled: boolean;
+  metadata?: Record<string, unknown>;
+  createdAt: IsoDateTime;
+  updatedAt: IsoDateTime;
+}
+
 const nowIso = () => new Date().toISOString();
 
 export class HubState {
@@ -178,6 +190,37 @@ export class HubState {
     return [...this.runs.values()]
       .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
       .slice(0, limit);
+  }
+
+  // Connections
+  addConnection(input: Omit<Connection, 'id' | 'createdAt' | 'updatedAt'>) {
+    const ts = nowIso();
+    const connection: Connection = {
+      id: randomUUID(),
+      createdAt: ts,
+      updatedAt: ts,
+      ...input,
+    };
+    this.connections.set(connection.id, connection);
+    return connection;
+  }
+
+  listConnections() {
+    return [...this.connections.values()].sort(
+      (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+    );
+  }
+
+  deleteConnection(id: string) {
+    this.connections.delete(id);
+  }
+
+  updateConnection(id: string, updates: Partial<Omit<Connection, 'id' | 'createdAt' | 'updatedAt'>>) {
+    const existing = this.connections.get(id);
+    if (!existing) throw new Error(`Connection not found: ${id}`);
+    const updated = { ...existing, ...updates, updatedAt: nowIso() };
+    this.connections.set(id, updated);
+    return updated;
   }
 }
 

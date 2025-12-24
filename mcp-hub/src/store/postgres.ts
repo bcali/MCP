@@ -87,6 +87,22 @@ export async function migrate(pool: Pool) {
 
     create index if not exists hub_run_steps_run_idx on hub_run_steps (run_id, ts);
   `);
+
+  await pool.query(`
+    create table if not exists hub_connections (
+      id uuid primary key,
+      name text not null,
+      type text not null,
+      endpoint text not null,
+      api_key text,
+      enabled boolean not null default true,
+      metadata jsonb,
+      created_at timestamptz not null default now(),
+      updated_at timestamptz not null default now()
+    );
+
+    create index if not exists hub_connections_enabled_idx on hub_connections (enabled);
+  `);
 }
 
 export class PostgresStore implements HubStore {
@@ -390,6 +406,68 @@ export class PostgresStore implements HubStore {
       message: r.message,
       data: r.data ?? undefined,
     }));
+  }
+
+  // Connections
+  async addConnection(input: Omit<Connection, 'id' | 'createdAt' | 'updatedAt'>): Promise<Connection> {
+    const id = randomUUID();
+    const ts = nowIso();
+    await this.pool.query(
+      `insert into hub_connections (id, name, type, endpoint, api_key, enabled, metadata, created_at, updated_at)
+       values ($1, $2, $3, $4, $5, $6, $7::jsonb, $8, $9)`,
+      [id, input.name, input.type, input.endpoint, input.apiKey ?? null, input.enabled, input.metadata ? JSON.stringify(input.metadata) : null, ts, ts]
+    );
+    return { id, ...input, createdAt: ts, updatedAt: ts };
+  }
+
+  async listConnections(): Promise<Connection[]> {
+    const res = await this.pool.query(`select id::text, name, type, endpoint, api_key, enabled, metadata, created_at, updated_at from hub_connections order by created_at desc`);
+    return res.rows.map((r: any) => ({
+      id: r.id,
+      name: r.name,
+      type: r.type,
+      endpoint: r.endpoint,
+      apiKey: r.api_key ?? undefined,
+      enabled: r.enabled,
+      metadata: r.metadata ?? undefined,
+      createdAt: new Date(r.created_at).toISOString(),
+      updatedAt: new Date(r.updated_at).toISOString(),
+    }));
+  }
+
+  async deleteConnection(id: string): Promise<void> {
+    await this.pool.query(`delete from hub_connections where id = $1`, [id]);
+  }
+
+  async updateConnection(id: string, updates: Partial<Omit<Connection, 'id' | 'createdAt' | 'updatedAt'>>): Promise<Connection> {
+    const setClause: string[] = [];
+    const values: any[] = [id];
+    let i = 2;
+
+    if (updates.name !== undefined) { setClause.push(`name = $${i++}`); values.push(updates.name); }
+    if (updates.type !== undefined) { setClause.push(`type = $${i++}`); values.push(updates.type); }
+    if (updates.endpoint !== undefined) { setClause.push(`endpoint = $${i++}`); values.push(updates.endpoint); }
+    if (updates.apiKey !== undefined) { setClause.push(`api_key = $${i++}`); values.push(updates.apiKey); }
+    if (updates.enabled !== undefined) { setClause.push(`enabled = $${i++}`); values.push(updates.enabled); }
+    if (updates.metadata !== undefined) { setClause.push(`metadata = $${i++}::jsonb`); values.push(JSON.stringify(updates.metadata)); }
+
+    setClause.push(`updated_at = now()`);
+
+    const query = `update hub_connections set ${setClause.join(', ')} where id = $1 returning id::text, name, type, endpoint, api_key, enabled, metadata, created_at, updated_at`;
+    const res = await this.pool.query(query, values);
+    const r = res.rows[0];
+    if (!r) throw new Error(`Connection not found: ${id}`);
+    return {
+      id: r.id,
+      name: r.name,
+      type: r.type,
+      endpoint: r.endpoint,
+      apiKey: r.api_key ?? undefined,
+      enabled: r.enabled,
+      metadata: r.metadata ?? undefined,
+      createdAt: new Date(r.created_at).toISOString(),
+      updatedAt: new Date(r.updated_at).toISOString(),
+    };
   }
 }
 

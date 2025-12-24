@@ -56,4 +56,21 @@ export class MemoryStore implements HubStore {
   async listRuns(limit?: number): Promise<Run[]> {
     return this.state.listRuns(limit);
   }
+
+  // Connections
+  async addConnection(input: Omit<Connection, 'id' | 'createdAt' | 'updatedAt'>): Promise<Connection> {
+    return this.state.addConnection(input);
+  }
+
+  async listConnections(): Promise<Connection[]> {
+    return this.state.listConnections();
+  }
+
+  async deleteConnection(id: string): Promise<void> {
+    return this.state.deleteConnection(id);
+  }
+
+  async updateConnection(id: string, updates: Partial<Omit<Connection, 'id' | 'createdAt' | 'updatedAt'>>): Promise<Connection> {
+    return this.state.updateConnection(id, updates);
+  }
 }

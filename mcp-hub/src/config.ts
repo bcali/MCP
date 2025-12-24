@@ -26,6 +26,7 @@ const EnvSchema = z.object({
   JIRA_BASE_URL: z.string().trim().optional(),
 
   SLACK_BOT_TOKEN: z.string().trim().optional(),
+  GAMMA_API_KEY: z.string().trim().optional(),
 });
 
 export type Env = z.infer<typeof EnvSchema>;

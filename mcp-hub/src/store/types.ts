@@ -1,4 +1,4 @@
-import type { Artifact, Link, MemoryItem, Run, RunStep } from '../state.js';
+import type { Artifact, Link, MemoryItem, Run, RunStep, Connection } from '../state.js';
 
 export interface ArtifactCreateInput {
   type: string;
@@ -44,6 +44,12 @@ export interface HubStore {
   completeRun(runId: string, status: 'completed' | 'failed'): Promise<Run>;
   getRun(runId: string): Promise<Run | null>;
   listRuns(limit?: number): Promise<Run[]>;
+
+  // Connections
+  addConnection(input: Omit<Connection, 'id' | 'createdAt' | 'updatedAt'>): Promise<Connection>;
+  listConnections(): Promise<Connection[]>;
+  deleteConnection(id: string): Promise<void>;
+  updateConnection(id: string, updates: Partial<Omit<Connection, 'id' | 'createdAt' | 'updatedAt'>>): Promise<Connection>;
 }
 
 

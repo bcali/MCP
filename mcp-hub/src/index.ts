@@ -61,6 +61,37 @@ app.get('/v1/runs', apiKeyAuth(env.MCP_HUB_API_KEY), async (_req, res) => {
   }
 });
 
+// Connection Management
+app.get('/v1/connections', apiKeyAuth(env.MCP_HUB_API_KEY), async (_req, res) => {
+  try {
+    const connections = await store.listConnections();
+    res.json(connections);
+  } catch (e) {
+    console.error('[mcp-hub] Error listing connections:', e);
+    res.status(500).json({ error: 'Failed to list connections' });
+  }
+});
+
+app.post('/v1/connections', apiKeyAuth(env.MCP_HUB_API_KEY), express.json(), async (req, res) => {
+  try {
+    const connection = await store.addConnection(req.body);
+    res.json(connection);
+  } catch (e) {
+    console.error('[mcp-hub] Error adding connection:', e);
+    res.status(500).json({ error: 'Failed to add connection' });
+  }
+});
+
+app.delete('/v1/connections/:id', apiKeyAuth(env.MCP_HUB_API_KEY), async (req, res) => {
+  try {
+    await store.deleteConnection(req.params.id);
+    res.status(204).send();
+  } catch (e) {
+    console.error('[mcp-hub] Error deleting connection:', e);
+    res.status(500).json({ error: 'Failed to delete connection' });
+  }
+});
+
 // Track active SSE transports by session ID
 const transports = new Map<string, SSEServerTransport>();
 
