@@ -40,3 +40,6 @@ jobs:
             ghcr.io/${{ github.repository }}/mcp-hub:${{ github.sha }}
 
 
+
+
+
