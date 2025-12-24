@@ -2,7 +2,7 @@ import { Pool } from 'pg';
 import { randomUUID } from 'node:crypto';
 import type { BlobStore } from './r2.js';
 import type { HubStore, ArtifactCreateInput, LinkAddInput, LinkListFilter } from './types.js';
-import type { Artifact, Link, MemoryItem, Run, RunStep } from '../state.js';
+import type { Artifact, Link, MemoryItem, Run, RunStep, Connection } from '../state.js';
 
 const nowIso = () => new Date().toISOString();
 

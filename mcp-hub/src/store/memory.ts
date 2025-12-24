@@ -1,5 +1,5 @@
 import { HubState } from '../state.js';
-import type { Artifact, Link, MemoryItem, Run, RunStep } from '../state.js';
+import type { Artifact, Link, MemoryItem, Run, RunStep, Connection } from '../state.js';
 import type { ArtifactCreateInput, HubStore, LinkAddInput, LinkListFilter } from './types.js';
 
 export class MemoryStore implements HubStore {

@@ -1,4 +1,4 @@
-import axios, { AxiosError, AxiosInstance } from 'axios';
+import axios, { AxiosError, type AxiosInstance } from 'axios';
 import {
   CARD_DIMENSIONS,
   CARD_DIMENSIONS_BY_FORMAT,

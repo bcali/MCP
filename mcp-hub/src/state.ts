@@ -67,6 +67,7 @@ export class HubState {
   private artifacts = new Map<string, Artifact>();
   private links = new Map<string, Link>();
   private runs = new Map<string, Run>();
+  private connections = new Map<string, Connection>();
 
   upsertMemory(key: string, value: string, tags: string[] = []) {
     const existing = this.memoryByKey.get(key);
