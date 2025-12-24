@@ -70,7 +70,6 @@ export const STATIC_TOOLS: Tool[] = [
       properties: {
         type: { type: 'string' },
         name: { type: 'string' },
-        source: { type: 'string' },
         contentType: { type: 'string' },
         contentText: { type: 'string' },
         metadata: { type: 'object' },
