@@ -12,24 +12,54 @@ import {
   Stepper,
   Step,
   StepLabel,
-  Chip,
   CircularProgress,
   Alert,
   IconButton,
 } from '@mui/material';
 import { ArrowLeft } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { addConnection } from '../services/api';
 
 export function AddConnection() {
   const navigate = useNavigate();
   const [activeStep, setActiveStep] = useState(0);
   const [connectionType, setConnectionType] = useState('SSE MCP Server');
-  const [testing, setTesting] = useState(false);
-  const [testResult, setTestResult] = useState<{ success: boolean; tools: string[] } | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const [formData, setFormData] = useState({ name: '', endpoint: '', apiKey: '', description: '' });
+  const [formData, setFormData] = useState({ name: '', endpoint: '', apiKey: '', metadata: '' });
 
-  const steps = ['Select Type', 'Configuration', 'Test Connection'];
+  const steps = ['Select Type', 'Configuration'];
+
+  const handleSave = async () => {
+    setSaving(true);
+    setError(null);
+    try {
+      let metadataObj = {};
+      if (formData.metadata) {
+        try {
+          metadataObj = JSON.parse(formData.metadata);
+        } catch (e) {
+          throw new Error('Metadata must be valid JSON');
+        }
+      }
+
+      await addConnection({
+        name: formData.name,
+        type: connectionType,
+        endpoint: formData.endpoint,
+        apiKey: formData.apiKey || undefined,
+        enabled: true,
+        metadata: metadataObj,
+      });
+      navigate('/connections');
+    } catch (err: any) {
+      console.error('Failed to save connection:', err);
+      setError(err.message || 'Failed to save connection.');
+    } finally {
+      setSaving(false);
+    }
+  };
 
   return (
     <Box>
@@ -42,13 +72,15 @@ export function AddConnection() {
         {steps.map((label) => <Step key={label}><StepLabel>{label}</StepLabel></Step>)}
       </Stepper>
 
+      {error && <Alert severity="error" sx={{ mb: 3 }}>{error}</Alert>}
+
       {activeStep === 0 && (
         <Card>
           <CardContent>
             <Typography variant="h6" gutterBottom>Select Connection Type</Typography>
             <RadioGroup value={connectionType} onChange={(e) => setConnectionType(e.target.value)}>
               <FormControlLabel value="SSE MCP Server" control={<Radio />} label="SSE MCP Server" />
-              <FormControlLabel value="stdio MCP Server" control={<Radio />} label="stdio MCP Server" />
+              <FormControlLabel value="stdio MCP Server" control={<Radio disabled />} label="stdio MCP Server (Cloud Hub only supports SSE/HTTP)" />
             </RadioGroup>
             <Box display="flex" justifyContent="flex-end" mt={3}>
               <Button variant="contained" onClick={() => setActiveStep(1)}>Next</Button>
@@ -62,48 +94,20 @@ export function AddConnection() {
           <CardContent>
             <Typography variant="h6" gutterBottom>Configuration</Typography>
             <Box display="flex" flexDirection="column" gap={3}>
-              <TextField fullWidth label="Name" value={formData.name} onChange={(e) => setFormData({ ...formData, name: e.target.value })} />
-              <TextField fullWidth label="Endpoint" value={formData.endpoint} onChange={(e) => setFormData({ ...formData, endpoint: e.target.value })} />
+              <TextField fullWidth label="Name" value={formData.name} onChange={(e) => setFormData({ ...formData, name: e.target.value })} placeholder="e.g. My Remote Gamma Server" />
+              <TextField fullWidth label="Endpoint" value={formData.endpoint} onChange={(e) => setFormData({ ...formData, endpoint: e.target.value })} placeholder="https://..." />
+              <TextField fullWidth label="API Key (Optional)" value={formData.apiKey} onChange={(e) => setFormData({ ...formData, apiKey: e.target.value })} type="password" />
+              <TextField fullWidth label="Metadata (JSON Optional)" value={formData.metadata} onChange={(e) => setFormData({ ...formData, metadata: e.target.value })} multiline rows={3} placeholder="{}" />
             </Box>
             <Box display="flex" justifyContent="space-between" mt={3}>
               <Button onClick={() => setActiveStep(0)}>Back</Button>
-              <Button variant="contained" onClick={() => setActiveStep(2)} disabled={!formData.name || !formData.endpoint}>Next</Button>
-            </Box>
-          </CardContent>
-        </Card>
-      )}
-
-      {activeStep === 2 && (
-        <Card>
-          <CardContent>
-            <Typography variant="h6" gutterBottom>Test Connection</Typography>
-            {!testResult && (
-              <Button
-                fullWidth variant="contained"
-                onClick={async () => {
-                  setTesting(true);
-                  await new Promise(r => setTimeout(r, 1000));
-                  setTestResult({ success: true, tools: ['tool1', 'tool2'] });
-                  setTesting(false);
-                }}
-                disabled={testing}
-              >
-                {testing ? <CircularProgress size={20} /> : 'Run Test'}
+              <Button variant="contained" onClick={handleSave} disabled={!formData.name || !formData.endpoint || saving}>
+                {saving ? <CircularProgress size={20} /> : 'Save Connection'}
               </Button>
-            )}
-            {testResult && (
-              <Box display="flex" flexDirection="column" gap={3}>
-                <Alert severity="success">Connection successful!</Alert>
-                <Box display="flex" justifyContent="space-between">
-                  <Button onClick={() => setActiveStep(1)}>Back</Button>
-                  <Button variant="contained" onClick={() => navigate('/connections')}>Save</Button>
-                </Box>
-              </Box>
-            )}
+            </Box>
           </CardContent>
         </Card>
       )}
     </Box>
   );
 }
-

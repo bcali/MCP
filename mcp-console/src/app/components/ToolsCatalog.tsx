@@ -124,9 +124,9 @@ export function ToolsCatalog() {
               <TabPanel value={tabValue} index={2}>
                 <Typography variant="subtitle2" gutterBottom>Usage Examples</Typography>
                 <Box display="flex" flexDirection="column" gap={2}>
-                  {selectedTool.examples.map((example, idx) => (
+                  {selectedTool.examples?.map((example, idx) => (
                     <Box key={idx} component="pre" sx={{ bgcolor: 'grey.100', p: 2, borderRadius: 1, overflow: 'auto' }}>{example}</Box>
-                  ))}
+                  )) || <Typography variant="body2" color="text.secondary">No examples available.</Typography>}
                 </Box>
               </TabPanel>
             </DialogContent>

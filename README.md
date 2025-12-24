@@ -10,7 +10,8 @@ A collection of high-performance Model Context Protocol (MCP) servers designed f
 ### 🌩️ [MCP Hub](./mcp-hub)
 A production-ready **Cloud MCP Gateway** that centralizes access to multiple tools and provides persistent state (memory, artifacts, and runs).
 - **Core Primitives**: Centralized `memory`, `artifacts`, and durable `runs`.
-- **Connectors**: Built-in integration for **Figma**, **GitHub**, **Confluence**, and **Slack**.
+- **Connectors**: Built-in integration for **Figma**, **GitHub**, **Confluence**, **Slack**, and **Gamma**.
+- **Dynamic Hub**: Add and manage other MCP servers via the web console.
 - **Cloud Native**: Designed for Google Cloud Run with SSE support and session affinity.
 - **Persistent**: Backed by Postgres (Supabase) for durable cross-session memory.
 

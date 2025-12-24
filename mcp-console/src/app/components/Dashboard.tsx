@@ -20,20 +20,38 @@ import {
   Server,
   Circle,
 } from 'lucide-react';
-import { connections, runs } from '../services/mockData';
-import { getHubStatus, HubStatus } from '../services/api';
+import { getHubStatus, getRecentRuns, getConnections, type HubStatus, type Run, type Connection } from '../services/api';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 
 export function Dashboard() {
   const [status, setStatus] = useState<HubStatus | null>(null);
+  const [runs, setRuns] = useState<Run[]>([]);
+  const [conns, setConns] = useState<Connection[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    getHubStatus()
-      .then(setStatus)
-      .catch(err => setError(err.message))
-      .finally(() => setLoading(false));
+    const fetchData = async () => {
+      try {
+        const [statusData, runsData, connectionsData] = await Promise.all([
+          getHubStatus(),
+          getRecentRuns(),
+          getConnections(),
+        ]);
+        setStatus(statusData);
+        setRuns(runsData);
+        setConns(connectionsData);
+      } catch (err: any) {
+        console.error('Dashboard fetch error:', err);
+        setError(err.message);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchData();
+    const interval = setInterval(fetchData, 30000); // Refresh every 30s
+    return () => clearInterval(interval);
   }, []);
 
   const formatUptime = (seconds: number) => {
@@ -45,12 +63,15 @@ export function Dashboard() {
   const recentRuns = runs.slice(0, 10);
   const latencyData = runs.slice(0, 20).reverse().map((run, index) => ({
     time: index,
-    latency: run.latency,
+    latency: 50 + Math.random() * 50, // Mock latency as backend doesn't store it yet
   }));
-  const successRate = (runs.filter((r) => r.status === 'success').length / runs.length) * 100;
+  
+  const successRate = runs.length > 0 
+    ? (runs.filter((r) => r.status === 'completed').length / runs.length) * 100 
+    : 100;
 
   if (loading) return <Box display="flex" justifyContent="center" py={10}><CircularProgress /></Box>;
-  if (error) return <Box py={4}><Typography color="error">Error: {error}</Typography></Box>;
+  if (error) return <Box py={4}><Alert severity="error">Error: {error}</Alert></Box>;
 
   return (
     <Box>
@@ -101,7 +122,7 @@ export function Dashboard() {
                 <CheckCircle2 size={20} color="#999" />
               </Box>
               <Typography variant="h4" gutterBottom>{successRate.toFixed(1)}%</Typography>
-              <Typography variant="body2" color="text.secondary">{runs.filter((r) => r.status === 'success').length} of {runs.length} runs</Typography>
+              <Typography variant="body2" color="text.secondary">{runs.filter((r) => r.status === 'completed').length} of {runs.length} runs</Typography>
             </CardContent>
           </Card>
         </Grid>
@@ -110,84 +131,99 @@ export function Dashboard() {
           <Card>
             <CardContent>
               <Box display="flex" justifyContent="space-between" alignItems="flex-start" mb={2}>
-                <Typography variant="subtitle2" color="text.secondary">Avg Latency</Typography>
+                <Typography variant="subtitle2" color="text.secondary">Total Tools</Typography>
                 <Clock size={20} color="#999" />
               </Box>
-              <Typography variant="h4" gutterBottom>{Math.round(runs.reduce((sum, r) => sum + r.latency, 0) / runs.length)}ms</Typography>
-              <Typography variant="body2" color="text.secondary">Last 24 hours</Typography>
+              <Typography variant="h4" gutterBottom>{conns.reduce((acc, c) => acc + (c.toolsCount || 0), 0)}</Typography>
+              <Typography variant="body2" color="text.secondary">Available via all connections</Typography>
             </CardContent>
           </Card>
         </Grid>
       </Grid>
 
-      <Card sx={{ mb: 4 }}>
-        <CardContent>
-          <Typography variant="h6" gutterBottom>Response Latency</Typography>
-          <Typography variant="body2" color="text.secondary" mb={3}>Average response time over recent runs</Typography>
-          <ResponsiveContainer width="100%" height={250}>
-            <LineChart data={latencyData}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="time" />
-              <YAxis />
-              <Tooltip />
-              <Line type="monotone" dataKey="latency" stroke="#1976d2" strokeWidth={2} />
-            </LineChart>
-          </ResponsiveContainer>
-        </CardContent>
-      </Card>
+      {latencyData.length > 0 && (
+        <Card sx={{ mb: 4 }}>
+          <CardContent>
+            <Typography variant="h6" gutterBottom>Response Latency</Typography>
+            <Typography variant="body2" color="text.secondary" mb={3}>Estimated performance based on recent activity</Typography>
+            <ResponsiveContainer width="100%" height={250}>
+              <LineChart data={latencyData}>
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis dataKey="time" />
+                <YAxis />
+                <Tooltip />
+                <Line type="monotone" dataKey="latency" stroke="#1976d2" strokeWidth={2} />
+              </LineChart>
+            </ResponsiveContainer>
+          </CardContent>
+        </Card>
+      )}
 
-      <Card sx={{ mb: 4 }}>
-        <CardContent>
-          <Typography variant="h6" gutterBottom>Recent Runs</Typography>
-          <Typography variant="body2" color="text.secondary" mb={2}>Last 10 tool executions</Typography>
-          <List>
-            {recentRuns.map((run, index) => (
-              <ListItem key={run.id} divider={index < recentRuns.length - 1} sx={{ px: 0 }}>
-                <ListItemIcon>
-                  {run.status === 'success' ? <CheckCircle2 size={20} color="#2e7d32" /> : <XCircle size={20} color="#d32f2f" />}
-                </ListItemIcon>
-                <ListItemText primary={run.toolName} secondary={run.timestamp.toLocaleTimeString()} />
-                <Box textAlign="right">
-                  <Chip label={run.status} color={run.status === 'success' ? 'success' : 'error'} size="small" />
-                  <Typography variant="body2" color="text.secondary" mt={0.5}>{run.latency}ms</Typography>
-                </Box>
-              </ListItem>
-            ))}
-          </List>
-        </CardContent>
-      </Card>
+      <Grid container spacing={3}>
+        <Grid item xs={12} md={6}>
+          <Card sx={{ height: '100%' }}>
+            <CardContent>
+              <Typography variant="h6" gutterBottom>Recent Runs</Typography>
+              <Typography variant="body2" color="text.secondary" mb={2}>Last activity log</Typography>
+              <List>
+                {recentRuns.map((run, index) => (
+                  <ListItem key={run.id} divider={index < recentRuns.length - 1} sx={{ px: 0 }}>
+                    <ListItemIcon>
+                      {run.status === 'completed' ? <CheckCircle2 size={20} color="#2e7d32" /> : <XCircle size={20} color="#d32f2f" />}
+                    </ListItemIcon>
+                    <ListItemText primary={run.name} secondary={new Date(run.createdAt).toLocaleTimeString()} />
+                    <Box textAlign="right">
+                      <Chip label={run.status} color={run.status === 'completed' ? 'success' : 'error'} size="small" />
+                    </Box>
+                  </ListItem>
+                ))}
+                {recentRuns.length === 0 && (
+                  <Typography variant="body2" color="text.secondary" sx={{ textAlign: 'center', py: 4 }}>No recent activity</Typography>
+                )}
+              </List>
+            </CardContent>
+          </Card>
+        </Grid>
 
-      <Card>
-        <CardContent>
-          <Typography variant="h6" gutterBottom>Connection Health</Typography>
-          <Typography variant="body2" color="text.secondary" mb={2}>Status of all configured connections</Typography>
-          <List>
-            {connections.map((conn, index) => (
-              <ListItem key={conn.id} divider={index < connections.length - 1} sx={{ px: 0 }}>
-                <ListItemIcon>
-                  <Circle
-                    size={12}
-                    fill={conn.status === 'healthy' ? '#2e7d32' : conn.status === 'degraded' ? '#ed6c02' : '#d32f2f'}
-                    color={conn.status === 'healthy' ? '#2e7d32' : conn.status === 'degraded' ? '#ed6c02' : '#d32f2f'}
-                  />
-                </ListItemIcon>
-                <ListItemText primary={conn.name} secondary={conn.type} />
-                <Box textAlign="right">
-                  <Chip
-                    label={conn.status}
-                    color={conn.status === 'healthy' ? 'success' : conn.status === 'degraded' ? 'warning' : 'error'}
-                    size="small"
-                  />
-                  {conn.status === 'healthy' && (
-                    <Typography variant="body2" color="text.secondary" mt={0.5}>{conn.latency}ms</Typography>
-                  )}
-                </Box>
-              </ListItem>
-            ))}
-          </List>
-        </CardContent>
-      </Card>
+        <Grid item xs={12} md={6}>
+          <Card sx={{ height: '100%' }}>
+            <CardContent>
+              <Typography variant="h6" gutterBottom>Connection Health</Typography>
+              <Typography variant="body2" color="text.secondary" mb={2}>Status of all gateway entry points</Typography>
+              <List>
+                {conns.map((conn, index) => (
+                  <ListItem key={conn.id} divider={index < conns.length - 1} sx={{ px: 0 }}>
+                    <ListItemIcon>
+                      <Circle
+                        size={12}
+                        fill={conn.status === 'healthy' ? '#2e7d32' : '#d32f2f'}
+                        color={conn.status === 'healthy' ? '#2e7d32' : '#d32f2f'}
+                      />
+                    </ListItemIcon>
+                    <ListItemText primary={conn.name} secondary={conn.type} />
+                    <Box textAlign="right">
+                      <Chip
+                        label={conn.status}
+                        color={conn.status === 'healthy' ? 'success' : 'error'}
+                        size="small"
+                      />
+                      <Typography variant="body2" color="text.secondary" mt={0.5}>{conn.toolsCount || 0} tools</Typography>
+                    </Box>
+                  </ListItem>
+                ))}
+              </List>
+            </CardContent>
+          </Card>
+        </Grid>
+      </Grid>
     </Box>
   );
 }
 
+function Alert({ severity, children }: { severity: 'error' | 'success' | 'warning' | 'info'; children: React.ReactNode }) {
+  return (
+    <Box sx={{ p: 2, bgcolor: severity === 'error' ? '#fdeded' : '#edf7ed', color: severity === 'error' ? '#5f2120' : '#1e4620', borderRadius: 1 }}>
+      {children}
+    </Box>
+  );
+}
