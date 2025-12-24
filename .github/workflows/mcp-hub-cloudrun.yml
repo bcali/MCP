@@ -39,6 +39,7 @@ jobs:
           --region "${{ secrets.GCP_REGION }}"
           --platform managed
           --allow-unauthenticated
+          --session-affinity
           --set-env-vars HOST=0.0.0.0,MCP_HUB_API_KEY="${{ secrets.MCP_HUB_API_KEY }}",DATABASE_URL="${{ secrets.DATABASE_URL }}"
 
 
