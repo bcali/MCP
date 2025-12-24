@@ -27,7 +27,6 @@ registerTools(server, store, env);
 
 const app = express();
 app.disable('x-powered-by');
-app.use(express.json({ limit: '15mb' }));
 
 app.get('/healthz', (_req, res) => res.status(200).json({ ok: true }));
 
