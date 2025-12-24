@@ -1,3 +1,4 @@
+import { useState, useEffect } from 'react';
 import {
   Box,
   Card,
@@ -9,6 +10,7 @@ import {
   ListItem,
   ListItemText,
   ListItemIcon,
+  CircularProgress,
 } from '@mui/material';
 import {
   Activity,
@@ -18,10 +20,28 @@ import {
   Server,
   Circle,
 } from 'lucide-react';
-import { hubStatus, connections, runs } from '../services/mockData';
+import { connections, runs } from '../services/mockData';
+import { getHubStatus, HubStatus } from '../services/api';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 
 export function Dashboard() {
+  const [status, setStatus] = useState<HubStatus | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    getHubStatus()
+      .then(setStatus)
+      .catch(err => setError(err.message))
+      .finally(() => setLoading(false));
+  }, []);
+
+  const formatUptime = (seconds: number) => {
+    const h = Math.floor(seconds / 3600);
+    const m = Math.floor((seconds % 3600) / 60);
+    return `${h}h ${m}m`;
+  };
+
   const recentRuns = runs.slice(0, 10);
   const latencyData = runs.slice(0, 20).reverse().map((run, index) => ({
     time: index,
@@ -29,11 +49,14 @@ export function Dashboard() {
   }));
   const successRate = (runs.filter((r) => r.status === 'success').length / runs.length) * 100;
 
+  if (loading) return <Box display="flex" justifyContent="center" py={10}><CircularProgress /></Box>;
+  if (error) return <Box py={4}><Typography color="error">Error: {error}</Typography></Box>;
+
   return (
     <Box>
       <Box mb={4}>
         <Typography variant="h4" gutterBottom>Dashboard</Typography>
-        <Typography variant="body2" color="text.secondary">MCP Hub status and metrics overview</Typography>
+        <Typography variant="body2" color="text.secondary">Real-time MCP Hub status and metrics</Typography>
       </Box>
 
       <Grid container spacing={3} mb={4}>
@@ -46,13 +69,13 @@ export function Dashboard() {
               </Box>
               <Box display="flex" alignItems="center" gap={1} mb={1}>
                 <Chip
-                  label={hubStatus.status === 'up' ? 'UP' : 'DOWN'}
-                  color={hubStatus.status === 'up' ? 'success' : 'error'}
+                  label={status?.status === 'up' ? 'ONLINE' : 'OFFLINE'}
+                  color={status?.status === 'up' ? 'success' : 'error'}
                   size="small"
                 />
-                <Typography variant="body2" color="text.secondary">v{hubStatus.version}</Typography>
+                <Typography variant="body2" color="text.secondary">v{status?.version}</Typography>
               </Box>
-              <Typography variant="body2" color="text.secondary">Uptime: {hubStatus.uptime}</Typography>
+              <Typography variant="body2" color="text.secondary">Uptime: {formatUptime(status?.uptime || 0)}</Typography>
             </CardContent>
           </Card>
         </Grid>
@@ -64,8 +87,8 @@ export function Dashboard() {
                 <Typography variant="subtitle2" color="text.secondary">Active Connections</Typography>
                 <Activity size={20} color="#999" />
               </Box>
-              <Typography variant="h4" gutterBottom>{hubStatus.activeConnections} / {hubStatus.totalConnections}</Typography>
-              <Typography variant="body2" color="text.secondary">{connections.filter((c) => c.enabled).length} enabled</Typography>
+              <Typography variant="h4" gutterBottom>{status?.activeConnections || 0}</Typography>
+              <Typography variant="body2" color="text.secondary">SSE sessions established</Typography>
             </CardContent>
           </Card>
         </Grid>

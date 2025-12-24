@@ -30,6 +30,27 @@ app.disable('x-powered-by');
 
 app.get('/healthz', (_req, res) => res.status(200).json({ ok: true }));
 
+// Management API for the Console
+app.get('/v1/status', apiKeyAuth(env.MCP_HUB_API_KEY), async (_req, res) => {
+  res.json({
+    status: 'up',
+    version: '0.1.0',
+    uptime: process.uptime(),
+    activeConnections: transports.size,
+  });
+});
+
+app.get('/v1/runs', apiKeyAuth(env.MCP_HUB_API_KEY), async (_req, res) => {
+  // HubStore doesn't have a listRuns yet, but we can add it or just return empty for now
+  // For now, let's try to get what we can from the store if it supports it
+  try {
+    const artifacts = await store.listArtifacts('run'); // We often store run summaries as artifacts
+    res.json(artifacts);
+  } catch (e) {
+    res.json([]);
+  }
+});
+
 // Track active SSE transports by session ID
 const transports = new Map<string, SSEServerTransport>();
 
