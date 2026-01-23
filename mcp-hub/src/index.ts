@@ -9,6 +9,7 @@ import { loadEnv } from './config.js';
 import { apiKeyAuth } from './auth.js';
 import { registerTools, STATIC_TOOLS } from './tools.js';
 import { createStore } from './store/index.js';
+import { logger } from './utils/logger.js';
 
 dotenv.config();
 
@@ -30,7 +31,28 @@ const app = express();
 app.disable('x-powered-by');
 app.use(cors()); // Enable CORS for all origins (needed for GitHub Pages console)
 
+// Health checks
 app.get('/healthz', (_req, res) => res.status(200).json({ ok: true }));
+
+app.get('/healthz/ready', async (_req, res) => {
+  try {
+    // Quick database check
+    await store.listRuns(1);
+    res.status(200).json({
+      ok: true,
+      status: 'ready',
+      database: 'connected',
+      version: '0.1.0'
+    });
+  } catch (e) {
+    logger.error('Readiness check failed', e);
+    res.status(503).json({
+      ok: false,
+      status: 'not_ready',
+      database: 'disconnected'
+    });
+  }
+});
 
 // Management API for the Console
 app.get('/v1/status', apiKeyAuth(env.MCP_HUB_API_KEY), async (_req, res) => {
@@ -46,7 +68,7 @@ app.get('/v1/tools', apiKeyAuth(env.MCP_HUB_API_KEY), async (_req, res) => {
   try {
     res.json(STATIC_TOOLS);
   } catch (e) {
-    console.error('[mcp-hub] Error listing tools:', e);
+    logger.error('Error listing tools', e);
     res.status(500).json({ error: 'Failed to list tools' });
   }
 });
@@ -56,7 +78,7 @@ app.get('/v1/runs', apiKeyAuth(env.MCP_HUB_API_KEY), async (_req, res) => {
     const runs = await store.listRuns(50);
     res.json(runs);
   } catch (e) {
-    console.error('[mcp-hub] Error listing runs:', e);
+    logger.error('Error listing runs', e);
     res.status(500).json({ error: 'Failed to list runs' });
   }
 });
@@ -67,7 +89,7 @@ app.get('/v1/connections', apiKeyAuth(env.MCP_HUB_API_KEY), async (_req, res) =>
     const connections = await store.listConnections();
     res.json(connections);
   } catch (e) {
-    console.error('[mcp-hub] Error listing connections:', e);
+    logger.error('Error listing connections', e);
     res.status(500).json({ error: 'Failed to list connections' });
   }
 });
@@ -77,7 +99,7 @@ app.post('/v1/connections', apiKeyAuth(env.MCP_HUB_API_KEY), express.json(), asy
     const connection = await store.addConnection(req.body);
     res.json(connection);
   } catch (e) {
-    console.error('[mcp-hub] Error adding connection:', e);
+    logger.error('Error adding connection', e);
     res.status(500).json({ error: 'Failed to add connection' });
   }
 });
@@ -92,7 +114,7 @@ app.delete('/v1/connections/:id', apiKeyAuth(env.MCP_HUB_API_KEY), async (req, r
     await store.deleteConnection(id);
     res.status(204).send();
   } catch (e) {
-    console.error('[mcp-hub] Error deleting connection:', e);
+    logger.error('Error deleting connection', e);
     res.status(500).json({ error: 'Failed to delete connection' });
   }
 });
@@ -104,12 +126,12 @@ app.get('/v1/sse', apiKeyAuth(env.MCP_HUB_API_KEY), async (req, res) => {
   const transport = new SSEServerTransport('/mcp', res);
   const sessionId = transport.sessionId;
   transports.set(sessionId, transport);
-  console.error(`[mcp-hub] New SSE connection established. Session: ${sessionId}`);
-  
+  logger.info('New SSE connection established', { sessionId, activeConnections: transports.size });
+
   await server.connect(transport);
-  
+
   transport.onclose = () => {
-    console.error(`[mcp-hub] SSE connection closed for session ${sessionId}`);
+    logger.info('SSE connection closed', { sessionId, activeConnections: transports.size - 1 });
     transports.delete(sessionId);
   };
 });
@@ -119,7 +141,7 @@ app.post('/mcp', async (req, res) => {
   const transport = transports.get(sessionId);
 
   if (!transport) {
-    console.error(`[mcp-hub] No transport found for session ${sessionId}`);
+    logger.warn('No transport found for session', { sessionId });
     res.status(404).send('Session not found');
     return;
   }
@@ -127,9 +149,45 @@ app.post('/mcp', async (req, res) => {
   await transport.handlePostMessage(req, res);
 });
 
-app.listen(env.PORT, env.HOST, () => {
-  console.error(`MCP Hub listening on http://${env.HOST}:${env.PORT}`);
-  console.error(`MCP endpoint: /v1/sse (recommended for mcp-remote) or /mcp`);
+const httpServer = app.listen(env.PORT, env.HOST, () => {
+  logger.info('MCP Hub started', {
+    host: env.HOST,
+    port: env.PORT,
+    endpoint: '/v1/sse',
+    version: '0.1.0',
+    environment: process.env.NODE_ENV || 'development'
+  });
 });
+
+// Graceful shutdown handler
+const shutdown = async (signal: string) => {
+  logger.info('Received shutdown signal', { signal });
+
+  // Stop accepting new connections
+  httpServer.close(() => {
+    logger.info('HTTP server closed');
+  });
+
+  // Close all active SSE connections
+  logger.info('Closing SSE connections', { count: transports.size });
+  transports.forEach((transport, sessionId) => {
+    try {
+      transport.close?.();
+      logger.debug('SSE connection closed', { sessionId });
+    } catch (e) {
+      logger.error('Error closing SSE connection', e, { sessionId });
+    }
+  });
+  transports.clear();
+
+  // Give connections time to close
+  setTimeout(() => {
+    logger.info('Shutdown complete');
+    process.exit(0);
+  }, 1000);
+};
+
+process.on('SIGTERM', () => shutdown('SIGTERM'));
+process.on('SIGINT', () => shutdown('SIGINT'));
 
 

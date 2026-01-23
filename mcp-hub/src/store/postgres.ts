@@ -11,7 +11,13 @@ export function createPgPool(databaseUrl: string) {
   return new Pool({
     connectionString: databaseUrl,
     ssl: needsSsl ? { rejectUnauthorized: false } : undefined,
-    max: 5,
+    // Connection pool limits (optimized for Cloud Run)
+    max: 10, // Maximum number of clients in the pool
+    min: 0, // Minimum number of clients (allows scaling to zero)
+    idleTimeoutMillis: 30000, // Close idle connections after 30 seconds
+    connectionTimeoutMillis: 5000, // Timeout connecting to database after 5 seconds
+    // Allow pool to end gracefully on shutdown
+    allowExitOnIdle: true,
   });
 }
 

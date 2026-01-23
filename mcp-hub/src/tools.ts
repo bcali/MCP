@@ -406,7 +406,7 @@ export function registerTools(server: Server, store: HubStore, env: Env) {
     const { name, arguments: args } = request.params;
 
     // Determine connector for isolation (blast radius control)
-    const connectorId = name.includes('_') ? name.split('_')[0] : 'core';
+    const connectorId = name.includes('_') ? name.split('_')[0] ?? 'core' : 'core';
     const breaker = resilience.getBreaker(connectorId);
     const bulkhead = resilience.getBulkhead(connectorId);
 
@@ -424,7 +424,7 @@ export function registerTools(server: Server, store: HubStore, env: Env) {
             switch (name) {
               case 'memory_put': {
                 const p = MemoryPutSchema.parse(args ?? {});
-                const eventId = (p.source && p.source_event_id) ? generateEventId(p.source as string, p.source_event_id as string) : undefined;
+                const eventId = (p.source && p.source_event_id) ? generateEventId(p.source, p.source_event_id) : undefined;
                 const item = await store.upsertMemory(p.key, p.value, p.tags ?? [], eventId);
                 return { content: [{ type: 'text', text: JSON.stringify(item, null, 2) }] };
               }
@@ -440,7 +440,7 @@ export function registerTools(server: Server, store: HubStore, env: Env) {
               }
               case 'artifact_create': {
                 const p = ArtifactCreateSchema.parse(args ?? {});
-                const eventId = (p.source && p.source_event_id) ? generateEventId(p.source as string, p.source_event_id as string) : undefined;
+                const eventId = (p.source && p.source_event_id) ? generateEventId(p.source, p.source_event_id) : undefined;
                 const artifact = await store.createArtifact({ ...p, eventId });
                 return { content: [{ type: 'text', text: JSON.stringify(artifact, null, 2) }] };
               }
@@ -456,7 +456,7 @@ export function registerTools(server: Server, store: HubStore, env: Env) {
               }
               case 'link_add': {
                 const p = LinkAddSchema.parse(args ?? {});
-                const eventId = (p.source && p.source_event_id) ? generateEventId(p.source as string, p.source_event_id as string) : undefined;
+                const eventId = (p.source && p.source_event_id) ? generateEventId(p.source, p.source_event_id) : undefined;
                 const link = await store.addLink({ ...p, eventId });
                 return { content: [{ type: 'text', text: JSON.stringify(link, null, 2) }] };
               }
@@ -467,13 +467,13 @@ export function registerTools(server: Server, store: HubStore, env: Env) {
               }
               case 'run_start': {
                 const p = RunStartSchema.parse(args ?? {});
-                const eventId = (p.source && p.source_event_id) ? generateEventId(p.source as string, p.source_event_id as string) : undefined;
+                const eventId = (p.source && p.source_event_id) ? generateEventId(p.source, p.source_event_id) : undefined;
                 const run = await store.startRun(p.name, eventId);
                 return { content: [{ type: 'text', text: JSON.stringify(run, null, 2) }] };
               }
               case 'run_step': {
                 const p = RunStepSchema.parse(args ?? {});
-                const eventId = (p.source && p.source_event_id) ? generateEventId(p.source as string, p.source_event_id as string) : undefined;
+                const eventId = (p.source && p.source_event_id) ? generateEventId(p.source, p.source_event_id) : undefined;
                 const step = await store.addRunStep(p.runId, { kind: p.kind, message: p.message, data: p.data, eventId });
                 return { content: [{ type: 'text', text: JSON.stringify(step, null, 2) }] };
               }
