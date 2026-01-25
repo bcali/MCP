@@ -15,6 +15,9 @@
 **/.env.*
 !**/.env.example
 
+# Claude config with sensitive data
+.claude/mcp-servers.json
+
 # OS / editor
 .DS_Store
 Thumbs.db

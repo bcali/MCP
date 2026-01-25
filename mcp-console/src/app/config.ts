@@ -1,5 +1,10 @@
 export const config = {
-  hubUrl: import.meta.env.VITE_HUB_URL || 'https://mcp-hub-6jzkdzuf2a-uc.a.run.app',
-  hubApiKey: import.meta.env.VITE_HUB_API_KEY || 'Iwant@newpass007',
+  hubUrl: import.meta.env.VITE_HUB_URL || 'http://localhost:8080',
+  hubApiKey: import.meta.env.VITE_HUB_API_KEY || '',
 };
+
+// Throw error if API key is missing in production
+if (!config.hubApiKey && config.hubUrl.includes('run.app')) {
+  console.warn('⚠️ VITE_HUB_API_KEY not set. Using empty key for development.');
+}
 

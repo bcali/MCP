@@ -3,7 +3,7 @@
     "hub-local": {
       "url": "http://localhost:8080/v1/sse",
       "headers": {
-        "x-api-key": "N0mAdgBaacRse21jxjpaqQuXu/RtmG/ibEb2cNYSNfs"
+        "x-api-key": "your-api-key-here"
       }
     }
   }
