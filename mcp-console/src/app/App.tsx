@@ -2,7 +2,7 @@ import { BrowserRouter, Routes, Route, Link, useLocation } from 'react-router-do
 import { ThemeProvider, CssBaseline } from '@mui/material';
 import { AppBar, Toolbar, Typography, Box, Container, Button } from '@mui/material';
 import { LayoutDashboard, Cable, Wrench, Activity } from 'lucide-react';
-import { Dashboard } from './components/Dashboard';
+import { EnhancedDashboard } from './components/EnhancedDashboard';
 import { Connections } from './components/Connections';
 import { ToolsCatalog } from './components/ToolsCatalog';
 import { Runs } from './components/Runs';
@@ -62,7 +62,7 @@ function AppContent() {
       <Navigation />
       <Container maxWidth="xl" sx={{ mt: 4, mb: 4, flexGrow: 1 }}>
         <Routes>
-          <Route path="/" element={<Dashboard />} />
+          <Route path="/" element={<EnhancedDashboard />} />
           <Route path="/connections" element={<Connections />} />
           <Route path="/tools" element={<ToolsCatalog />} />
           <Route path="/runs" element={<Runs />} />
