@@ -1,0 +1,13 @@
+Month,Year,GCP Cloud Run ($),Supabase ($),Cloudflare R2 ($),GitHub ($),Total ($),GCP Request Count,GCP Instance Hours,Supabase DB Size (MB),Supabase Bandwidth (GB),Notes
+Jan,2026,2.50,0.00,0.00,0.00,2.50,45000,12,45,0.5,Light development usage
+Feb,2026,,,,,,,,,,
+Mar,2026,,,,,,,,,,
+Apr,2026,,,,,,,,,,
+May,2026,,,,,,,,,,
+Jun,2026,,,,,,,,,,
+Jul,2026,,,,,,,,,,
+Aug,2026,,,,,,,,,,
+Sep,2026,,,,,,,,,,
+Oct,2026,,,,,,,,,,
+Nov,2026,,,,,,,,,,
+Dec,2026,,,,,,,,,,
