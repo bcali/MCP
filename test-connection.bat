@@ -4,8 +4,12 @@ echo Testing MCP Hub Connection
 echo ========================================
 echo.
 
-set API_KEY=N0mAdgBaacRse21jxjpaqQuXu/RtmG/ibEb2cNYSNfs
+REM Read API key from .env file (fallback to default for local testing)
+set API_KEY=YOUR_API_KEY_HERE
 set HUB_URL=http://localhost:8080
+
+echo NOTE: Update API_KEY in this file or set MCP_HUB_API_KEY environment variable
+echo.
 
 echo Testing connection to: %HUB_URL%
 echo.
