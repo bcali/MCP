@@ -138,6 +138,18 @@ export async function getConnections(): Promise<Connection[]> {
         updatedAt: new Date().toISOString(),
         toolsCount: allTools.filter(t => t.name.startsWith('slack_')).length,
         latency: 180,
+      },
+      {
+        id: 'conn-prompts',
+        name: 'BC Prompt Library',
+        type: 'Internal Connector',
+        endpoint: 'GitHub Raw API',
+        enabled: true,
+        status: 'healthy',
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        toolsCount: allTools.filter(t => t.name.startsWith('prompts_')).length,
+        latency: 45,
       }
     ];
 
