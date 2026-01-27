@@ -73,10 +73,12 @@ class MetricsCollector {
   endToolExecution(index: number, success: boolean, error?: string) {
     if (index >= 0 && index < this.toolExecutions.length) {
       const execution = this.toolExecutions[index];
-      execution.endTime = Date.now();
-      execution.duration = execution.endTime - execution.startTime;
-      execution.success = success;
-      if (error) execution.error = error;
+      if (execution) {
+        execution.endTime = Date.now();
+        execution.duration = execution.endTime - execution.startTime;
+        execution.success = success;
+        if (error) execution.error = error;
+      }
     }
   }
 
@@ -92,15 +94,21 @@ class MetricsCollector {
       if (!byTool[e.toolName]) {
         byTool[e.toolName] = { count: 0, successRate: 0, avgDuration: 0 };
       }
-      byTool[e.toolName].count++;
+      const toolStats = byTool[e.toolName];
+      if (toolStats) {
+        toolStats.count++;
+      }
     });
 
     Object.keys(byTool).forEach((tool) => {
       const executions = this.toolExecutions.filter((e) => e.toolName === tool);
       const success = executions.filter((e) => e.success).length;
-      byTool[tool].successRate = (success / executions.length) * 100;
-      byTool[tool].avgDuration =
-        executions.reduce((sum, e) => sum + (e.duration || 0), 0) / executions.length;
+      const toolStats = byTool[tool];
+      if (toolStats) {
+        toolStats.successRate = (success / executions.length) * 100;
+        toolStats.avgDuration =
+          executions.reduce((sum, e) => sum + (e.duration || 0), 0) / executions.length;
+      }
     });
 
     return {

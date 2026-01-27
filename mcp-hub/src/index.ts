@@ -7,14 +7,29 @@ import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { SSEServerTransport } from '@modelcontextprotocol/sdk/server/sse.js';
 import { loadEnv } from './config.js';
 import { apiKeyAuth } from './auth.js';
-import { registerTools, STATIC_TOOLS } from './tools.js';
+import { registerTools, STATIC_TOOLS, resilience } from './tools.js';
 import { createStore } from './store/index.js';
 import { logger } from './utils/logger.js';
+import { metrics } from './utils/metrics.js';
 
 dotenv.config();
 
 const env = loadEnv();
-const store = await createStore(env);
+
+// Track database connection time
+const dbStartTime = Date.now();
+let store;
+try {
+  store = await createStore(env);
+  const dbConnectionTime = Date.now() - dbStartTime;
+  metrics.markDatabaseConnected(dbConnectionTime);
+  logger.info('Database connected', { connectionTime: dbConnectionTime });
+} catch (e) {
+  const errorMsg = e instanceof Error ? e.message : String(e);
+  metrics.recordStartupError(`Database connection failed: ${errorMsg}`);
+  logger.error('Failed to connect to database', e);
+  throw e;
+}
 
 const server = new Server(
   { name: 'mcp-hub', version: '0.1.0' },
@@ -119,6 +134,32 @@ app.delete('/v1/connections/:id', apiKeyAuth(env.MCP_HUB_API_KEY), async (req, r
   }
 });
 
+// Metrics endpoints
+app.get('/v1/metrics', apiKeyAuth(env.MCP_HUB_API_KEY), (_req, res) => {
+  res.json(metrics.getHealthStatus());
+});
+
+app.get('/v1/metrics/startup', apiKeyAuth(env.MCP_HUB_API_KEY), (_req, res) => {
+  res.json(metrics.getStartupMetrics());
+});
+
+app.get('/v1/metrics/tools', apiKeyAuth(env.MCP_HUB_API_KEY), (_req, res) => {
+  res.json(metrics.getToolExecutionStats());
+});
+
+app.get('/v1/metrics/database', apiKeyAuth(env.MCP_HUB_API_KEY), (_req, res) => {
+  const poolStats = metrics.getConnectionPoolStats();
+  if (poolStats) {
+    res.json(poolStats);
+  } else {
+    res.json({ message: 'Connection pool stats not available (using in-memory store)' });
+  }
+});
+
+app.get('/v1/metrics/resilience', apiKeyAuth(env.MCP_HUB_API_KEY), (_req, res) => {
+  res.json(resilience.getAllStats());
+});
+
 // Track active SSE transports by session ID
 const transports = new Map<string, SSEServerTransport>();
 
@@ -150,13 +191,25 @@ app.post('/mcp', async (req, res) => {
 });
 
 const httpServer = app.listen(env.PORT, env.HOST, () => {
+  const serverStartTime = Date.now() - dbStartTime;
+  metrics.markServerListening(serverStartTime);
+
   logger.info('MCP Hub started', {
     host: env.HOST,
     port: env.PORT,
     endpoint: '/v1/sse',
     version: '0.1.0',
-    environment: process.env.NODE_ENV || 'development'
+    environment: process.env.NODE_ENV || 'development',
+    startupTime: serverStartTime
   });
+
+  // Track connection pool stats periodically (if using PostgreSQL)
+  if ('getPoolStats' in store && typeof store.getPoolStats === 'function') {
+    setInterval(() => {
+      const poolStats = (store as any).getPoolStats();
+      metrics.updateConnectionPoolStats(poolStats);
+    }, 30000); // Update every 30 seconds
+  }
 });
 
 // Graceful shutdown handler

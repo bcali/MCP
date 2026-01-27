@@ -11,6 +11,7 @@ import type { Env } from './config.js';
 import type { HubStore } from './store/types.js';
 import { generateEventId } from './utils/id.js';
 import { ResilienceRegistry, withTimeout } from './utils/resilience.js';
+import { metrics } from './utils/metrics.js';
 import { figmaImport } from './tools/figma.js';
 import { githubCreatePullRequest, githubPutFile } from './tools/github.js';
 import { slackPostMessage } from './tools/slack.js';
@@ -310,8 +311,10 @@ export const STATIC_TOOLS: Tool[] = [
   },
 ];
 
+// Export resilience registry for metrics
+export const resilience = new ResilienceRegistry();
+
 export function registerTools(server: Server, store: HubStore, env: Env) {
-  const resilience = new ResilienceRegistry();
 
   const MemoryPutSchema = z.object({
     key: z.string().trim().min(1),
@@ -405,12 +408,16 @@ export function registerTools(server: Server, store: HubStore, env: Env) {
   server.setRequestHandler(CallToolRequestSchema, async (request) => {
     const { name, arguments: args } = request.params;
 
+    // Start tracking tool execution
+    const executionIndex = metrics.startToolExecution(name);
+
     // Determine connector for isolation (blast radius control)
     const connectorId = name.includes('_') ? name.split('_')[0] ?? 'core' : 'core';
     const breaker = resilience.getBreaker(connectorId);
     const bulkhead = resilience.getBulkhead(connectorId);
 
     if (breaker.isOpen()) {
+      metrics.endToolExecution(executionIndex, false, `Circuit breaker OPEN for ${connectorId}`);
       throw new McpError(
         ErrorCode.InternalError,
         `Connector '${connectorId}' is temporarily unavailable (Circuit Breaker OPEN). Please try again later.`
@@ -564,6 +571,7 @@ export function registerTools(server: Server, store: HubStore, env: Env) {
       });
 
       breaker.recordSuccess();
+      metrics.endToolExecution(executionIndex, true);
       return result;
     } catch (error) {
       if (error instanceof z.ZodError) {
@@ -576,10 +584,13 @@ export function registerTools(server: Server, store: HubStore, env: Env) {
       // Record failure for the circuit breaker
       breaker.recordFailure();
 
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      metrics.endToolExecution(executionIndex, false, errorMessage);
+
       if (error instanceof McpError) {
         throw error;
       }
-      const message = error instanceof Error ? error.message : 'Unknown error';
+      const message = errorMessage;
       throw new McpError(ErrorCode.InternalError, message);
     }
   });

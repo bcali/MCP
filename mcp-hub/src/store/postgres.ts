@@ -127,6 +127,15 @@ export class PostgresStore implements HubStore {
     private blobs: BlobStore | null
   ) {}
 
+  // Get connection pool stats for monitoring
+  getPoolStats() {
+    return {
+      totalCount: this.pool.totalCount,
+      idleCount: this.pool.idleCount,
+      waitingCount: this.pool.waitingCount,
+    };
+  }
+
   async upsertMemory(key: string, value: string, tags: string[], eventId?: string): Promise<MemoryItem> {
     const id = randomUUID();
     const res = await this.pool.query(

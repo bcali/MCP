@@ -36,6 +36,18 @@ export class CircuitBreaker {
       this.state = 'OPEN';
     }
   }
+
+  getStats() {
+    const now = Date.now();
+    return {
+      state: this.state,
+      failures: this.failures,
+      lastFailure: this.lastFailureTime ? new Date(this.lastFailureTime).toISOString() : null,
+      nextRetry: this.state === 'OPEN' && this.lastFailureTime
+        ? new Date(this.lastFailureTime + this.resetTimeoutMs).toISOString()
+        : null,
+    };
+  }
 }
 
 /**
@@ -104,6 +116,14 @@ export class ResilienceRegistry {
       this.bulkheads.set(connectorId, new Bulkhead());
     }
     return this.bulkheads.get(connectorId)!;
+  }
+
+  getAllStats() {
+    const stats: Record<string, any> = {};
+    this.breakers.forEach((breaker, connectorId) => {
+      stats[connectorId] = breaker.getStats();
+    });
+    return stats;
   }
 }
 
