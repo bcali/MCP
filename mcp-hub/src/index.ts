@@ -46,6 +46,9 @@ const app = express();
 app.disable('x-powered-by');
 app.use(cors()); // Enable CORS for all origins (needed for GitHub Pages console)
 
+// Track active SSE transports by session ID (declared early to avoid temporal dead zone)
+const transports = new Map<string, SSEServerTransport>();
+
 // Health checks
 app.get('/healthz', (_req, res) => res.status(200).json({ ok: true }));
 
@@ -160,9 +163,7 @@ app.get('/v1/metrics/resilience', apiKeyAuth(env.MCP_HUB_API_KEY), (_req, res) =
   res.json(resilience.getAllStats());
 });
 
-// Track active SSE transports by session ID
-const transports = new Map<string, SSEServerTransport>();
-
+// SSE endpoint
 app.get('/v1/sse', apiKeyAuth(env.MCP_HUB_API_KEY), async (req, res) => {
   const transport = new SSEServerTransport('/mcp', res);
   const sessionId = transport.sessionId;
