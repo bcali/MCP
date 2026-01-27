@@ -47,7 +47,7 @@ jobs:
           --timeout 300
           --concurrency 80
           --cpu-throttling
-          --startup-cpu-boost
+          --cpu-boost
           --set-env-vars HOST=0.0.0.0,NODE_ENV=production,MCP_HUB_API_KEY="${{ secrets.MCP_HUB_API_KEY }}",DATABASE_URL="${{ secrets.DATABASE_URL }}",FIGMA_TOKEN="${{ secrets.FIGMA_TOKEN }}",GAMMA_API_KEY="${{ secrets.GAMMA_API_KEY }}"
 
 
