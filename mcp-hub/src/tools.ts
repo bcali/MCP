@@ -26,6 +26,7 @@ import {
   EXPORT_TYPES,
   CARD_DIMENSIONS,
 } from './tools/gamma-constants.js';
+import { PROMPT_TOOLS, promptsSearch, promptsGet, promptsListCategories } from './tools/prompts.js';
 
 export const STATIC_TOOLS: Tool[] = [
   {
@@ -309,6 +310,8 @@ export const STATIC_TOOLS: Tool[] = [
       properties: {},
     },
   },
+  // BC Prompt Library tools
+  ...PROMPT_TOOLS,
 ];
 
 // Export resilience registry for metrics
@@ -559,6 +562,22 @@ export function registerTools(server: Server, store: HubStore, env: Env) {
               case 'gamma_get_themes': {
                 const result = await gammaGetThemes({ env });
                 return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
+              }
+
+              // BC Prompt Library
+              case 'prompts_search': {
+                const { query, category } = z.object({
+                  query: z.string(),
+                  category: z.string().optional(),
+                }).parse(args ?? {});
+                return await promptsSearch({ query, category });
+              }
+              case 'prompts_get': {
+                const { name: promptName } = z.object({ name: z.string() }).parse(args ?? {});
+                return await promptsGet({ name: promptName });
+              }
+              case 'prompts_list_categories': {
+                return await promptsListCategories();
               }
 
               default:
