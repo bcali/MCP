@@ -16,7 +16,9 @@ dotenv.config();
 
 let env;
 try {
+  console.error('[MCP-HUB-STARTUP] Loading environment variables...');
   env = loadEnv();
+  console.error('[MCP-HUB-STARTUP] ✓ Environment loaded successfully');
   logger.info('Environment loaded successfully', {
     hasDbUrl: !!env.DATABASE_URL,
     hasApiKey: !!env.MCP_HUB_API_KEY,
@@ -25,29 +27,40 @@ try {
     nodeEnv: process.env.NODE_ENV
   });
 } catch (e) {
+  console.error('[MCP-HUB-STARTUP] ❌ FATAL: Failed to load environment variables');
+  console.error('[MCP-HUB-STARTUP] Error:', e);
   logger.error('Failed to load environment variables', e);
-  throw e;
+  process.exit(1);
 }
 
 // Track database connection time
 const dbStartTime = Date.now();
 let store;
 try {
+  console.error('[MCP-HUB-STARTUP] Attempting database connection...');
   logger.info('Attempting database connection...');
   store = await createStore(env);
   const dbConnectionTime = Date.now() - dbStartTime;
   metrics.markDatabaseConnected(dbConnectionTime);
+  console.error(`[MCP-HUB-STARTUP] ✓ Database connected in ${dbConnectionTime}ms`);
   logger.info('Database connected successfully', { connectionTime: dbConnectionTime });
 } catch (e) {
   const errorMsg = e instanceof Error ? e.message : String(e);
   const errorStack = e instanceof Error ? e.stack : undefined;
+
+  // Use console.error to ensure error appears in Cloud Run logs
+  console.error('[MCP-HUB-STARTUP] ❌ FATAL: Database connection failed');
+  console.error('[MCP-HUB-STARTUP] Error:', errorMsg);
+  console.error('[MCP-HUB-STARTUP] Stack:', errorStack);
+
   metrics.recordStartupError(`Database connection failed: ${errorMsg}`);
   logger.error('Failed to connect to database', e, {
     message: errorMsg,
     stack: errorStack,
     dbUrl: env.DATABASE_URL ? 'present (masked)' : 'missing'
   });
-  throw e;
+
+  process.exit(1);
 }
 
 const server = new Server(
