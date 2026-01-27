@@ -14,20 +14,39 @@ import { metrics } from './utils/metrics.js';
 
 dotenv.config();
 
-const env = loadEnv();
+let env;
+try {
+  env = loadEnv();
+  logger.info('Environment loaded successfully', {
+    hasDbUrl: !!env.DATABASE_URL,
+    hasApiKey: !!env.MCP_HUB_API_KEY,
+    port: env.PORT,
+    host: env.HOST,
+    nodeEnv: process.env.NODE_ENV
+  });
+} catch (e) {
+  logger.error('Failed to load environment variables', e);
+  throw e;
+}
 
 // Track database connection time
 const dbStartTime = Date.now();
 let store;
 try {
+  logger.info('Attempting database connection...');
   store = await createStore(env);
   const dbConnectionTime = Date.now() - dbStartTime;
   metrics.markDatabaseConnected(dbConnectionTime);
-  logger.info('Database connected', { connectionTime: dbConnectionTime });
+  logger.info('Database connected successfully', { connectionTime: dbConnectionTime });
 } catch (e) {
   const errorMsg = e instanceof Error ? e.message : String(e);
+  const errorStack = e instanceof Error ? e.stack : undefined;
   metrics.recordStartupError(`Database connection failed: ${errorMsg}`);
-  logger.error('Failed to connect to database', e);
+  logger.error('Failed to connect to database', e, {
+    message: errorMsg,
+    stack: errorStack,
+    dbUrl: env.DATABASE_URL ? 'present (masked)' : 'missing'
+  });
   throw e;
 }
 
@@ -190,6 +209,8 @@ app.post('/mcp', async (req, res) => {
 
   await transport.handlePostMessage(req, res);
 });
+
+logger.info('Starting HTTP server...', { port: env.PORT, host: env.HOST });
 
 const httpServer = app.listen(env.PORT, env.HOST, () => {
   const serverStartTime = Date.now() - dbStartTime;
