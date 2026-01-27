@@ -414,3 +414,112 @@ bash mcp-hub/scripts/start-dev.sh  # Linux/macOS
 ---
 
 **Remember**: This is a living document. Keep it updated as the project evolves!
+
+### Session 2026-01-27: Cloud Run Deployment & Monitoring Setup
+**Context**: User wanted to deploy MCP Hub to Cloud Run and access the web dashboard. Multiple deployment issues were encountered and resolved.
+
+**Goals**:
+1. Fix Cloud Run deployment failures
+2. Get the dashboard accessible
+3. Implement monitoring to prevent future issues
+
+**Problems Encountered**:
+
+#### 1. Incorrect gcloud Flag
+**Error**: `unrecognized arguments: --startup-cpu-boost (did you mean '--cpu-boost'?)`
+**Cause**: Used wrong flag name in Cloud Run deployment workflow
+**Fix**: Changed `--startup-cpu-boost` to `--cpu-boost` in [.github/workflows/mcp-hub-cloudrun.yml](.github/workflows/mcp-hub-cloudrun.yml)
+**Commit**: `a7e9d3a`
+
+#### 2. Container Startup Timeout
+**Error**: "The user-provided container failed to start and listen on the port defined provided by the PORT=8080 environment variable within the allocated timeout"
+**Cause**: Container built successfully but failed to start listening on port 8080
+**Investigation**: Checked Cloud Run logs, found DNS resolution failure
+
+#### 3. Supabase Database Paused (Root Cause)
+**Error**: `getaddrinfo ENOTFOUND db.zsksxijnmxfsolilxihy.supabase.co`
+**Cause**: Supabase free tier pauses databases after 7 days of inactivity
+**Impact**: 
+- Database connection attempted BEFORE HTTP server started listening
+- Cloud Run timed out waiting for port 8080
+- 3 failed deployments
+**Fix**: Resumed Supabase database in dashboard
+**Commit**: `e6199c0` (triggered new deployment)
+**Result**: ✅ Deployment succeeded!
+
+**Architectural Insight**:
+The startup sequence in [mcp-hub/src/index.ts](mcp-hub/src/index.ts) is:
+```typescript
+const env = loadEnv();
+const store = await createStore(env);  // ← Connects to DB first
+// ... later ...
+app.listen(env.PORT, env.HOST, ...)    // ← HTTP server starts second
+```
+
+This means if the database is slow/unreachable, the container never starts listening, and Cloud Run kills it.
+
+**Implementation Summary**:
+
+#### A. Console Configuration Fixed
+- Updated [mcp-console/src/app/config.ts](mcp-console/src/app/config.ts) to use correct API key
+- Changed default URL to `http://localhost:8080` for local dev
+- Added warning for missing API key in production
+
+#### B. Monitoring & Metrics Added
+Created comprehensive monitoring documentation:
+- [MONITORING.md](MONITORING.md) - Complete observability guide
+- [mcp-hub/src/utils/metrics.ts](mcp-hub/src/utils/metrics.ts) - Metrics collection utility
+
+**Metrics to Track**:
+1. **Startup Health**: Database connection time, total startup time, errors
+2. **Database Connection Pool**: Total/idle/waiting connections
+3. **Tool Execution**: Success rate, duration, failures by tool
+4. **Circuit Breaker Status**: State, failure count, retry timing
+
+#### C. Deployment Workflow Improvements
+- Removed conflicting `--cpu-throttling` flag
+- Kept `--cpu-boost` for faster cold starts
+- Scale-to-zero configuration working (min-instances: 0)
+
+#### D. Documentation Updates
+- [DEPLOYMENT_TROUBLESHOOTING.md](DEPLOYMENT_TROUBLESHOOTING.md) - Comprehensive deployment guide
+- [PRD.md](PRD.md) - Product requirements document created
+- [MONITORING.md](MONITORING.md) - Monitoring strategy and lessons learned
+
+**Key Learnings**:
+
+1. **Supabase Free Tier Limitation**: Databases pause after inactivity
+   - Solution: Use connection pooler for serverless
+   - Alternative: Upgrade to paid tier to prevent pausing
+   - Mitigation: Add retry logic with exponential backoff
+
+2. **Startup Sequence Matters**: Database connection blocks server startup
+   - Current: Synchronous database connection before HTTP server
+   - Consider: Async database initialization with health checks
+
+3. **Cloud Run Debugging**: Logs are critical
+   - Always check Cloud Run logs for startup failures
+   - Look for DNS errors, connection timeouts, etc.
+   - GCP Console → Cloud Run → Service → Logs
+
+4. **Monitoring Prevents Issues**: 
+   - Track startup time to detect slow databases
+   - Monitor connection pool to prevent exhaustion
+   - Alert on circuit breaker state changes
+
+**Cost Impact**:
+- ✅ Scale-to-zero working: $0 when idle
+- ✅ Expected cost: $1-5/month for personal use
+- ✅ Cold start: 3-5 seconds (acceptable for this use case)
+
+**Dashboard Status**:
+- ✅ Cloud Run URL: Working (after Supabase resume)
+- ✅ Console: Deployed at https://bcali.github.io/MCP/
+- ⚠️ Console → Cloud Run connection: Needs URL update (currently points to localhost)
+
+**Next Steps**:
+1. Add metrics endpoints to MCP Hub (`/v1/metrics/*`)
+2. Set up GCP monitoring dashboard
+3. Configure alerting policies
+4. Update console to use Cloud Run URL instead of localhost
+
