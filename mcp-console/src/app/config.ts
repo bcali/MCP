@@ -1,9 +1,17 @@
 export const config = {
-  hubUrl: import.meta.env.VITE_HUB_URL || 'http://localhost:8080',
-  hubApiKey: import.meta.env.VITE_HUB_API_KEY || 'N0mAdgBaacRse21jxjpaqQuXu/RtmG/ibEb2cNYSNfs',
+  // Use Cloud Run by default, fallback to localhost for local development
+  hubUrl: import.meta.env.VITE_HUB_URL || 'https://mcp-hub-6jzkdzuf2a-uc.a.run.app',
+  // API key must be provided via environment variable or updated here
+  hubApiKey: import.meta.env.VITE_HUB_API_KEY || 'Iwant@newpass007',
 };
 
-// Warn if API key is missing in production
-if (!config.hubApiKey && config.hubUrl.includes('run.app')) {
-  console.warn('⚠️ VITE_HUB_API_KEY not set. Using development key.');
+// Warn if using default API key in production
+if (config.hubApiKey === 'YOUR_API_KEY_HERE' && config.hubUrl.includes('run.app')) {
+  console.error('❌ CRITICAL: Update VITE_HUB_API_KEY environment variable or config.ts with your actual API key');
 }
+
+// Log configuration (without exposing full API key)
+console.log('📡 MCP Console Configuration:', {
+  hubUrl: config.hubUrl,
+  apiKeyConfigured: !!config.hubApiKey && config.hubApiKey !== 'YOUR_API_KEY_HERE',
+});
