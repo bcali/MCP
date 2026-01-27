@@ -26,10 +26,11 @@ export function createPgPool(databaseUrl: string) {
 export async function migrate(pool: Pool) {
   // Minimal schema, designed to be easy to evolve.
   // For Supabase, this runs in the public schema by default.
+
+  // Create hub_memory table (without event_id initially for backwards compat)
   await pool.query(`
     create table if not exists hub_memory (
       id uuid primary key,
-      event_id text unique,
       key text unique not null,
       value text not null,
       tags text[] not null default '{}',
@@ -38,13 +39,18 @@ export async function migrate(pool: Pool) {
     );
 
     create index if not exists hub_memory_key_idx on hub_memory (key);
+  `);
+
+  // Add event_id column if it doesn't exist (for existing deployments)
+  await pool.query(`
+    alter table hub_memory add column if not exists event_id text unique;
     create index if not exists hub_memory_event_id_idx on hub_memory (event_id);
   `);
 
+  // Create hub_artifacts table
   await pool.query(`
     create table if not exists hub_artifacts (
       id uuid primary key,
-      event_id text unique,
       type text not null,
       name text,
       source text,
@@ -56,13 +62,18 @@ export async function migrate(pool: Pool) {
     );
 
     create index if not exists hub_artifacts_type_idx on hub_artifacts (type);
+  `);
+
+  // Add event_id column if it doesn't exist
+  await pool.query(`
+    alter table hub_artifacts add column if not exists event_id text unique;
     create index if not exists hub_artifacts_event_id_idx on hub_artifacts (event_id);
   `);
 
+  // Create hub_links table
   await pool.query(`
     create table if not exists hub_links (
       id uuid primary key,
-      event_id text unique,
       from_type text not null,
       from_id text not null,
       to_type text not null,
@@ -74,13 +85,18 @@ export async function migrate(pool: Pool) {
 
     create index if not exists hub_links_from_idx on hub_links (from_type, from_id);
     create index if not exists hub_links_to_idx on hub_links (to_type, to_id);
+  `);
+
+  // Add event_id column if it doesn't exist
+  await pool.query(`
+    alter table hub_links add column if not exists event_id text unique;
     create index if not exists hub_links_event_id_idx on hub_links (event_id);
   `);
 
+  // Create hub_runs table
   await pool.query(`
     create table if not exists hub_runs (
       id uuid primary key,
-      event_id text unique,
       name text not null,
       status text not null,
       created_at timestamptz not null default now(),
@@ -88,13 +104,18 @@ export async function migrate(pool: Pool) {
     );
 
     create index if not exists hub_runs_status_idx on hub_runs (status);
+  `);
+
+  // Add event_id column if it doesn't exist
+  await pool.query(`
+    alter table hub_runs add column if not exists event_id text unique;
     create index if not exists hub_runs_event_id_idx on hub_runs (event_id);
   `);
 
+  // Create hub_run_steps table
   await pool.query(`
     create table if not exists hub_run_steps (
       id uuid primary key,
-      event_id text unique,
       run_id uuid not null references hub_runs(id) on delete cascade,
       ts timestamptz not null default now(),
       kind text not null,
@@ -103,6 +124,11 @@ export async function migrate(pool: Pool) {
     );
 
     create index if not exists hub_run_steps_run_idx on hub_run_steps (run_id, ts);
+  `);
+
+  // Add event_id column if it doesn't exist
+  await pool.query(`
+    alter table hub_run_steps add column if not exists event_id text unique;
     create index if not exists hub_run_steps_event_id_idx on hub_run_steps (event_id);
   `);
 
