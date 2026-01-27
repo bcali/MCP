@@ -67,3 +67,4 @@ This repository includes a CI/CD pipeline that deploys to Cloud Run on every pus
 
 ## 📜 License
 MIT
+# Trigger deployment after Supabase activation
