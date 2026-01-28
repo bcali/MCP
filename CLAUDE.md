@@ -523,3 +523,123 @@ Created comprehensive monitoring documentation:
 3. Configure alerting policies
 4. Update console to use Cloud Run URL instead of localhost
 
+---
+
+### Session 2026-01-28: BC Prompt Library Integration & Complete Connector Setup
+**Context**: User requested integration of their BC Prompt Library into MCP Hub and complete configuration of all connector tokens for production deployment.
+
+**Goals**:
+1. Integrate BC Prompt Library into MCP Hub
+2. Fix Claude Desktop Figma server errors
+3. Configure all connector tokens (Figma, GitHub, Confluence, Slack, Gamma)
+4. Deploy fully configured system to Cloud Run production
+
+**Implementation Summary**:
+
+#### A. BC Prompt Library Integration
+**Created Files**:
+- [mcp-hub/src/tools/prompts.ts](mcp-hub/src/tools/prompts.ts) - New connector for BC Prompt Library
+- [mcp-console/src/app/services/api.ts](mcp-console/src/app/services/api.ts) - Added BC Prompt Library to connections list
+
+**Features Implemented**:
+- **Data Source**: Fetches 85 prompts from https://raw.githubusercontent.com/bcali/prompt-library/main/prompts-data.js
+- **Caching**: 5-minute cache to reduce GitHub API calls
+- **Three Tools**:
+  1. `prompts_search` - Search by keyword/category (9 categories: AI Features, Productivity, PM Artifacts, Discovery, Strategy & Planning, Analytics, Operations, GTM, Career)
+  2. `prompts_get` - Retrieve full prompt text by name
+  3. `prompts_list_categories` - List all categories with counts
+
+**Integration Pattern**:
+- Exported handler functions (promptsSearch, promptsGet, promptsListCategories)
+- Added cases to switch statement in [mcp-hub/src/tools.ts](mcp-hub/src/tools.ts)
+- Tools appear with `prompts_` prefix in tools list
+- No authentication required (public GitHub repo)
+
+**Commits**:
+- `961bff3` - feat: integrate BC Prompt Library into MCP Hub
+- `a5d1c9e` - feat: add BC Prompt Library to connections list
+
+#### B. Fixed Claude Desktop Figma Error
+**Problem**: Claude Desktop showed repeated 404 errors for `@modelcontextprotocol/server-figma`
+**Root Cause**: Package doesn't exist in npm registry
+**Solution**: Removed broken Figma entry from [D:\Users\bclark\AppData\Roaming\Claude\claude_desktop_config.json](D:\Users\bclark\AppData\Roaming\Claude\claude_desktop_config.json)
+**Rationale**: User already has Figma access through MCP Hub, no need for separate local server
+
+#### C. Complete Connector Token Configuration
+
+**Local Setup** - Configured [mcp-hub/.env](mcp-hub/.env):
+```bash
+FIGMA_TOKEN=figd_***
+GITHUB_TOKEN=ghp_***
+ATLASSIAN_EMAIL=bclark@minor.com
+ATLASSIAN_API_TOKEN=ATATT***
+CONFLUENCE_BASE_URL=https://minor.atlassian.net/wiki
+JIRA_BASE_URL=https://minor.atlassian.net
+GAMMA_API_KEY=sk-gamma-***
+SLACK_BOT_TOKEN=xoxb-***
+```
+
+**Cloud Deployment** - Updated [.github/workflows/mcp-hub-cloudrun.yml](.github/workflows/mcp-hub-cloudrun.yml):
+- Added all 8 connector environment variables to `--set-env-vars`
+- User added corresponding GitHub Secrets at https://github.com/bcali/MCP/settings/secrets/actions
+
+**Commit**: `9f4e59d` - feat: add all connector tokens to Cloud Run deployment
+
+#### D. Final System State
+
+**Connectors Active** (22 tools total):
+| Connector | Tools | Status | Token Type |
+|-----------|-------|--------|------------|
+| Hub Core | 11 | ✅ Active | Built-in |
+| Figma | 1 | ✅ Active | Personal Access Token |
+| GitHub | 2 | ✅ Active | Personal Access Token |
+| Confluence | 1 | ✅ Active | Atlassian API Token |
+| Slack | 1 | ✅ Active | Bot User OAuth Token |
+| Gamma | 3 | ✅ Active | API Key |
+| BC Prompt Library | 3 | ✅ Active | None (public) |
+
+**Deployment Endpoints**:
+- **Local Dev**: http://localhost:8080/v1/sse (for testing)
+- **Cloud Prod**: https://mcp-hub-6jzkdzuf2a-uc.a.run.app/v1/sse
+- **Console**: https://bcali.github.io/MCP/
+- **API Key**: N0mAdgBaacRse21jxjpaqQuXu/RtmG/ibEb2cNYSNfs
+
+**Key Learnings**:
+
+1. **Prompt Library Architecture**:
+   - Fetching from GitHub Raw works well for static prompt libraries
+   - Caching prevents rate limiting
+   - No authentication needed for public repos
+
+2. **Tool Registration Pattern Evolution**:
+   - Initial approach: Separate registration functions (registerPromptTools)
+   - Final approach: Export handler functions, add cases to switch statement
+   - Matches existing pattern used by Figma, GitHub, Gamma connectors
+
+3. **Claude Desktop vs MCP Hub**:
+   - Claude Desktop: Local stdio MCP servers (process-based)
+   - MCP Hub: Cloud SSE MCP endpoint (HTTP-based)
+   - BC Prompt Library available both ways (standalone + hub integration)
+
+4. **Complete Token Setup Process**:
+   - Each service has unique token generation process
+   - Figma: Settings → Personal Access Tokens
+   - GitHub: Settings → Developer Settings → Personal Access Tokens
+   - Confluence/Jira: Atlassian Account → API Tokens
+   - Slack: api.slack.com → Create App → OAuth & Permissions
+   - Gamma: gamma.app → Settings → API
+   - All tokens stored as GitHub Secrets for production deployment
+
+**Production Status**:
+- ✅ Local Hub running with all 22 tools
+- ✅ All connector tokens configured
+- ✅ Cloud Run deployment workflow updated
+- ✅ GitHub Secrets added
+- 🔄 Deployment in progress (triggered by commit 9f4e59d)
+
+**Next Steps**:
+1. Verify Cloud Run deployment completes successfully
+2. Test all 7 connectors in production
+3. Update console to show BC Prompt Library connector
+4. Document token refresh procedures for each service
+
