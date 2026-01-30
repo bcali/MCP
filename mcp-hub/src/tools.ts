@@ -12,7 +12,18 @@ import type { HubStore } from './store/types.js';
 import { generateEventId } from './utils/id.js';
 import { ResilienceRegistry, withTimeout } from './utils/resilience.js';
 import { metrics } from './utils/metrics.js';
-import { figmaImport } from './tools/figma.js';
+import {
+  figmaImport,
+  figmaGetNodes,
+  figmaGetImages,
+  figmaGetVariables,
+  figmaGetStyles,
+  figmaGetComponents,
+  figmaGetComponentSets,
+  figmaGetFileMetadata,
+  figmaGetDesignContext,
+  parseFigmaUrl,
+} from './tools/figma.js';
 import { githubCreatePullRequest, githubPutFile } from './tools/github.js';
 import { slackPostMessage } from './tools/slack.js';
 import { confluenceUpsertPage } from './tools/confluence.js';
@@ -177,6 +188,7 @@ export const STATIC_TOOLS: Tool[] = [
     },
   },
   // Connectors (initial set)
+  // Figma Tools - Enhanced Dev Mode API support
   {
     name: 'figma_import',
     description: 'Import basic metadata for a Figma file and store it as an artifact',
@@ -186,6 +198,105 @@ export const STATIC_TOOLS: Tool[] = [
         fileKey: { type: 'string' },
       },
       required: ['fileKey'],
+    },
+  },
+  {
+    name: 'figma_get_nodes',
+    description: 'Get specific nodes from a Figma file with full properties. Use this to get detailed layout and style data for code generation. Accepts Figma URLs or file keys.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        fileKey: { type: 'string', description: 'Figma file key or full URL' },
+        nodeIds: { type: 'array', items: { type: 'string' }, description: 'Node IDs to fetch (e.g., "123-456" or "123:456")' },
+        depth: { type: 'number', description: 'How deep to traverse the node tree' },
+        geometry: { type: 'string', enum: ['paths', 'bounds'], description: 'Include geometry data' },
+      },
+      required: ['fileKey', 'nodeIds'],
+    },
+  },
+  {
+    name: 'figma_get_images',
+    description: 'Render Figma nodes as images (PNG, SVG, JPG, PDF). Returns URLs to the rendered images.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        fileKey: { type: 'string', description: 'Figma file key or full URL' },
+        nodeIds: { type: 'array', items: { type: 'string' }, description: 'Node IDs to render' },
+        format: { type: 'string', enum: ['png', 'svg', 'jpg', 'pdf'], description: 'Image format (default: png)' },
+        scale: { type: 'number', description: 'Scale factor 0.01-4 (default: 2)' },
+        contentsOnly: { type: 'boolean', description: 'Render only contents, not the frame (default: true)' },
+      },
+      required: ['fileKey', 'nodeIds'],
+    },
+  },
+  {
+    name: 'figma_get_variables',
+    description: 'Get design tokens (variables) from a Figma file - colors, spacing, typography. Note: Requires Enterprise plan for full access.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        fileKey: { type: 'string', description: 'Figma file key or full URL' },
+      },
+      required: ['fileKey'],
+    },
+  },
+  {
+    name: 'figma_get_styles',
+    description: 'Get styles from a Figma file - text styles, color styles, effect styles, grid styles.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        fileKey: { type: 'string', description: 'Figma file key or full URL' },
+      },
+      required: ['fileKey'],
+    },
+  },
+  {
+    name: 'figma_get_components',
+    description: 'Get components from a Figma file - reusable design elements.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        fileKey: { type: 'string', description: 'Figma file key or full URL' },
+      },
+      required: ['fileKey'],
+    },
+  },
+  {
+    name: 'figma_get_component_sets',
+    description: 'Get component sets (variants) from a Figma file.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        fileKey: { type: 'string', description: 'Figma file key or full URL' },
+      },
+      required: ['fileKey'],
+    },
+  },
+  {
+    name: 'figma_get_metadata',
+    description: 'Get lightweight file metadata (name, last modified, thumbnail) without fetching full document.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        fileKey: { type: 'string', description: 'Figma file key or full URL' },
+      },
+      required: ['fileKey'],
+    },
+  },
+  {
+    name: 'figma_get_design_context',
+    description: 'Get comprehensive design context for code generation - combines node data, layout info, styles, and optionally images. Best tool for AI-assisted design-to-code.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        fileKey: { type: 'string', description: 'Figma file key or full URL' },
+        nodeIds: { type: 'array', items: { type: 'string' }, description: 'Node IDs to analyze' },
+        includeImages: { type: 'boolean', description: 'Include rendered image URLs (default: false)' },
+        imageFormat: { type: 'string', enum: ['png', 'svg', 'jpg'], description: 'Image format if including images' },
+        imageScale: { type: 'number', description: 'Image scale factor' },
+      },
+      required: ['fileKey', 'nodeIds'],
     },
   },
   {
@@ -493,10 +604,98 @@ export function registerTools(server: Server, store: HubStore, env: Env) {
                 return { content: [{ type: 'text', text: JSON.stringify(run, null, 2) }] };
               }
 
-              // Connectors
+              // Connectors - Figma
               case 'figma_import': {
                 const fileKey = z.object({ fileKey: z.string().trim().min(1) }).parse(args ?? {}).fileKey;
                 const result = await figmaImport({ fileKey, store, env });
+                return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
+              }
+              case 'figma_get_nodes': {
+                const p = z.object({
+                  fileKey: z.string().trim().min(1),
+                  nodeIds: z.array(z.string().trim().min(1)),
+                  depth: z.number().optional(),
+                  geometry: z.enum(['paths', 'bounds']).optional(),
+                }).parse(args ?? {});
+                // Parse URL if provided
+                const parsed = parseFigmaUrl(p.fileKey);
+                const fileKey = parsed?.fileKey ?? p.fileKey;
+                const result = await figmaGetNodes({ fileKey, nodeIds: p.nodeIds, env, depth: p.depth, geometry: p.geometry });
+                return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
+              }
+              case 'figma_get_images': {
+                const p = z.object({
+                  fileKey: z.string().trim().min(1),
+                  nodeIds: z.array(z.string().trim().min(1)),
+                  format: z.enum(['png', 'svg', 'jpg', 'pdf']).optional(),
+                  scale: z.number().min(0.01).max(4).optional(),
+                  contentsOnly: z.boolean().optional(),
+                }).parse(args ?? {});
+                const parsed = parseFigmaUrl(p.fileKey);
+                const fileKey = parsed?.fileKey ?? p.fileKey;
+                const result = await figmaGetImages({
+                  fileKey,
+                  nodeIds: p.nodeIds,
+                  env,
+                  format: p.format,
+                  scale: p.scale,
+                  contentsOnly: p.contentsOnly,
+                });
+                return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
+              }
+              case 'figma_get_variables': {
+                const p = z.object({ fileKey: z.string().trim().min(1) }).parse(args ?? {});
+                const parsed = parseFigmaUrl(p.fileKey);
+                const fileKey = parsed?.fileKey ?? p.fileKey;
+                const result = await figmaGetVariables({ fileKey, env });
+                return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
+              }
+              case 'figma_get_styles': {
+                const p = z.object({ fileKey: z.string().trim().min(1) }).parse(args ?? {});
+                const parsed = parseFigmaUrl(p.fileKey);
+                const fileKey = parsed?.fileKey ?? p.fileKey;
+                const result = await figmaGetStyles({ fileKey, env });
+                return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
+              }
+              case 'figma_get_components': {
+                const p = z.object({ fileKey: z.string().trim().min(1) }).parse(args ?? {});
+                const parsed = parseFigmaUrl(p.fileKey);
+                const fileKey = parsed?.fileKey ?? p.fileKey;
+                const result = await figmaGetComponents({ fileKey, env });
+                return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
+              }
+              case 'figma_get_component_sets': {
+                const p = z.object({ fileKey: z.string().trim().min(1) }).parse(args ?? {});
+                const parsed = parseFigmaUrl(p.fileKey);
+                const fileKey = parsed?.fileKey ?? p.fileKey;
+                const result = await figmaGetComponentSets({ fileKey, env });
+                return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
+              }
+              case 'figma_get_metadata': {
+                const p = z.object({ fileKey: z.string().trim().min(1) }).parse(args ?? {});
+                const parsed = parseFigmaUrl(p.fileKey);
+                const fileKey = parsed?.fileKey ?? p.fileKey;
+                const result = await figmaGetFileMetadata({ fileKey, env });
+                return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
+              }
+              case 'figma_get_design_context': {
+                const p = z.object({
+                  fileKey: z.string().trim().min(1),
+                  nodeIds: z.array(z.string().trim().min(1)),
+                  includeImages: z.boolean().optional(),
+                  imageFormat: z.enum(['png', 'svg', 'jpg']).optional(),
+                  imageScale: z.number().min(0.01).max(4).optional(),
+                }).parse(args ?? {});
+                const parsed = parseFigmaUrl(p.fileKey);
+                const fileKey = parsed?.fileKey ?? p.fileKey;
+                const result = await figmaGetDesignContext({
+                  fileKey,
+                  nodeIds: p.nodeIds,
+                  env,
+                  includeImages: p.includeImages,
+                  imageFormat: p.imageFormat,
+                  imageScale: p.imageScale,
+                });
                 return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
               }
               case 'github_put_file': {

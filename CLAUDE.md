@@ -2,7 +2,7 @@
 
 > **Context file for AI assistants** - This document helps Claude (and other AI assistants) understand the MCP Servers monorepo project architecture, patterns, and ongoing work.
 
-**Last Updated**: 2026-01-29
+**Last Updated**: 2026-01-30
 
 ---
 
@@ -702,11 +702,107 @@ claude mcp add mcp-hub --scope user --transport sse "https://mcp-hub-6jzkdzuf2a-
 - ✅ MCP Hub available globally in all Claude Code sessions
 - ✅ No per-project configuration needed
 - ✅ API key protected from git commits
-- ✅ 22 tools accessible everywhere (memory, artifacts, Figma, GitHub, Confluence, Slack, Gamma, BC Prompt Library)
+- ✅ 30 tools accessible everywhere (memory, artifacts, Figma (9 tools), GitHub, Confluence, Slack, Gamma, BC Prompt Library)
 
 **Workflow for New Projects**:
 1. Open any project in VS Code with Claude Code extension
 2. MCP Hub connects automatically
-3. All 22 tools immediately available
+3. All 30 tools immediately available
 4. No setup required
+
+---
+
+### Session 2026-01-30: Enhanced Figma Integration with Dev Mode API
+**Context**: User encountered limitations with the existing `figma_import` tool when trying to use Figma Make URLs. Requested enhancement using the newer Figma Dev Mode API for better design-to-code workflows.
+
+**Goals**:
+1. Research Figma Dev Mode API capabilities
+2. Add multiple new Figma tools for comprehensive design data extraction
+3. Enable better AI-assisted design-to-code generation
+
+**Research Findings**:
+
+#### Figma Make Limitation
+- **Figma Make** (`/make/` URLs) is a separate AI-powered product
+- Does NOT expose data via the standard Figma REST API
+- No workaround currently available for Make URLs
+
+#### Available Figma REST API Endpoints
+| Endpoint | Purpose |
+|----------|---------|
+| `GET /v1/files/:key/nodes` | Get specific nodes with full properties |
+| `GET /v1/images/:key` | Render nodes as images (PNG, SVG, PDF) |
+| `GET /v1/files/:key/variables/local` | Get design tokens (Enterprise only) |
+| `GET /v1/files/:key/styles` | Get text, color, effect, grid styles |
+| `GET /v1/files/:key/components` | Get component library |
+| `GET /v1/files/:key/component_sets` | Get component variants |
+
+**Implementation Summary**:
+
+#### A. New Figma Tools Created
+Enhanced [mcp-hub/src/tools/figma.ts](mcp-hub/src/tools/figma.ts) with 8 new tools:
+
+| Tool | Description |
+|------|-------------|
+| `figma_get_nodes` | Get specific nodes with full layout/style properties |
+| `figma_get_images` | Render nodes as PNG, SVG, JPG, or PDF |
+| `figma_get_variables` | Get design tokens (colors, spacing, typography) |
+| `figma_get_styles` | Get text styles, color styles, effects, grids |
+| `figma_get_components` | Get component library metadata |
+| `figma_get_component_sets` | Get component variants |
+| `figma_get_metadata` | Lightweight file info (name, thumbnail, version) |
+| `figma_get_design_context` | **Best for AI code gen** - combines nodes, layout, styles, images |
+
+#### B. Key Features
+- **URL Parsing**: All tools accept full Figma URLs or just file keys
+- **Node ID Normalization**: Converts `123-456` format to `123:456` API format
+- **Design Context Tool**: High-level function that:
+  - Extracts layout properties (auto-layout → flexbox mapping)
+  - Extracts visual properties (fills, strokes, effects)
+  - Extracts typography (for text nodes)
+  - Optionally includes rendered images
+  - Provides AI-friendly tips for code generation
+
+#### C. Layout-to-CSS Mapping Guide
+```
+Figma layoutMode    → CSS
+HORIZONTAL          → display: flex; flex-direction: row
+VERTICAL            → display: flex; flex-direction: column
+NONE                → position: absolute (or static)
+
+primaryAxisAlignItems → justify-content
+counterAxisAlignItems → align-items
+itemSpacing          → gap
+paddingLeft/Right/Top/Bottom → padding
+```
+
+**Tool Count Update**:
+- Previous: 22 tools
+- New: 30 tools (+8 Figma tools)
+
+**Files Modified**:
+- [mcp-hub/src/tools/figma.ts](mcp-hub/src/tools/figma.ts) - Complete rewrite with 8 new functions
+- [mcp-hub/src/tools.ts](mcp-hub/src/tools.ts) - Added tool definitions and handlers
+
+**Key Learnings**:
+
+1. **Figma Make vs Figma Design**:
+   - Make = AI-generated prototypes, no API access
+   - Design = Standard design files, full API access
+   - Only `/file/` and `/design/` URLs work with REST API
+
+2. **Official Figma MCP Server**:
+   - Figma has their own MCP server at `https://mcp.figma.com/mcp`
+   - Provides `get_design_context`, `get_variable_defs`, `get_screenshot` tools
+   - Our implementation provides similar capabilities via REST API
+
+3. **Variables API Restriction**:
+   - `GET /files/:key/variables/local` requires Enterprise plan
+   - Tool gracefully handles this with clear error message
+
+**Sources**:
+- [Figma REST API Docs](https://developers.figma.com/docs/rest-api/)
+- [Figma MCP Server Guide](https://github.com/figma/mcp-server-guide)
+- [Figma REST API Spec](https://github.com/figma/rest-api-spec)
+- [Figma Variables API](https://developers.figma.com/docs/rest-api/variables/)
 
