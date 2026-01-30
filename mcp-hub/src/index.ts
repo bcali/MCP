@@ -195,6 +195,87 @@ app.get('/v1/metrics/resilience', apiKeyAuth(env.MCP_HUB_API_KEY), (_req, res) =
   res.json(resilience.getAllStats());
 });
 
+// Connector test endpoints (bypasses MCP for quick validation)
+app.get('/v1/test/connectors', apiKeyAuth(env.MCP_HUB_API_KEY), async (_req, res) => {
+  const results: Record<string, { ok: boolean; message: string }> = {};
+
+  // Test Gamma
+  if (env.GAMMA_API_KEY) {
+    try {
+      const response = await fetch('https://public-api.gamma.app/v0.2/themes', {
+        headers: { 'X-API-KEY': env.GAMMA_API_KEY },
+        signal: AbortSignal.timeout(5000),
+      });
+      results.gamma = response.ok
+        ? { ok: true, message: 'Connected' }
+        : { ok: false, message: `HTTP ${response.status}` };
+    } catch (e) {
+      results.gamma = { ok: false, message: e instanceof Error ? e.message : 'Unknown error' };
+    }
+  } else {
+    results.gamma = { ok: false, message: 'GAMMA_API_KEY not configured' };
+  }
+
+  // Test Figma
+  if (env.FIGMA_TOKEN) {
+    try {
+      const response = await fetch('https://api.figma.com/v1/me', {
+        headers: { 'X-Figma-Token': env.FIGMA_TOKEN },
+        signal: AbortSignal.timeout(5000),
+      });
+      results.figma = response.ok
+        ? { ok: true, message: 'Connected' }
+        : { ok: false, message: `HTTP ${response.status}` };
+    } catch (e) {
+      results.figma = { ok: false, message: e instanceof Error ? e.message : 'Unknown error' };
+    }
+  } else {
+    results.figma = { ok: false, message: 'FIGMA_TOKEN not configured' };
+  }
+
+  // Test GitHub
+  if (env.GITHUB_TOKEN) {
+    try {
+      const response = await fetch('https://api.github.com/user', {
+        headers: { 'Authorization': `token ${env.GITHUB_TOKEN}` },
+        signal: AbortSignal.timeout(5000),
+      });
+      results.github = response.ok
+        ? { ok: true, message: 'Connected' }
+        : { ok: false, message: `HTTP ${response.status}` };
+    } catch (e) {
+      results.github = { ok: false, message: e instanceof Error ? e.message : 'Unknown error' };
+    }
+  } else {
+    results.github = { ok: false, message: 'GITHUB_TOKEN not configured' };
+  }
+
+  // Test Slack
+  if (env.SLACK_BOT_TOKEN) {
+    try {
+      const response = await fetch('https://slack.com/api/auth.test', {
+        headers: { 'Authorization': `Bearer ${env.SLACK_BOT_TOKEN}` },
+        signal: AbortSignal.timeout(5000),
+      });
+      const data = await response.json() as { ok: boolean; error?: string };
+      results.slack = data.ok
+        ? { ok: true, message: 'Connected' }
+        : { ok: false, message: data.error || 'Auth failed' };
+    } catch (e) {
+      results.slack = { ok: false, message: e instanceof Error ? e.message : 'Unknown error' };
+    }
+  } else {
+    results.slack = { ok: false, message: 'SLACK_BOT_TOKEN not configured' };
+  }
+
+  // Confluence - just check if configured
+  results.confluence = env.ATLASSIAN_API_TOKEN
+    ? { ok: true, message: 'Configured (no quick test available)' }
+    : { ok: false, message: 'ATLASSIAN_API_TOKEN not configured' };
+
+  res.json(results);
+});
+
 // SSE endpoint
 app.get('/v1/sse', apiKeyAuth(env.MCP_HUB_API_KEY), async (req, res) => {
   const transport = new SSEServerTransport('/mcp', res);
