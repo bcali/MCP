@@ -2,7 +2,7 @@
 
 > **Context file for AI assistants** - This document helps Claude (and other AI assistants) understand the MCP Servers monorepo project architecture, patterns, and ongoing work.
 
-**Last Updated**: 2026-01-23
+**Last Updated**: 2026-01-29
 
 ---
 
@@ -88,11 +88,11 @@ Connection   // Dynamic upstream MCP server connections
 ## Current Work & Recent Changes
 
 ### Recent Commits (Last 5)
-1. `be229cd` - Fix: remove duplicate property in tool schema and ensure all event IDs are correctly cast
-2. `f5dbea4` - Fix: explicit type casting for generateEventId arguments to satisfy TS compiler
-3. `2269f3e` - **Feat: implement idempotent event writes with deterministic IDs**
-4. `5b83287` - **Feat: implement health + blast radius control (circuit breaker, bulkhead, timeout)**
-5. `42faa72` - Feat: show internal connectors in connections list
+1. `05723a9` - chore: add .mcp.json to gitignore
+2. `27c8308` - docs: document BC Prompt Library integration and complete connector setup session
+3. `9f4e59d` - feat: add all connector tokens to Cloud Run deployment
+4. `a5d1c9e` - feat: add BC Prompt Library to connections list
+5. `961bff3` - feat: integrate BC Prompt Library into MCP Hub
 
 ### Active Work Areas
 
@@ -642,4 +642,71 @@ SLACK_BOT_TOKEN=xoxb-***
 2. Test all 7 connectors in production
 3. Update console to show BC Prompt Library connector
 4. Document token refresh procedures for each service
+
+---
+
+### Session 2026-01-29: Global MCP Configuration Setup
+**Context**: User wanted MCP Hub to be available across all projects/workspaces in Claude Code, not just specific projects with local `.mcp.json` files.
+
+**Goals**:
+1. Configure MCP Hub globally so it's available in every Claude Code session
+2. Eliminate need for per-project `.mcp.json` files
+
+**Implementation Summary**:
+
+#### A. Claude CLI Installation
+**Problem**: `claude` command not recognized in terminal
+**Solution**: Installed Claude CLI globally via npm:
+```bash
+npm install -g @anthropic-ai/claude-code
+```
+
+#### B. Global MCP Server Configuration
+**Command Used**:
+```bash
+claude mcp add mcp-hub --scope user --transport sse "https://mcp-hub-6jzkdzuf2a-uc.a.run.app/v1/sse?key=N0mAdgBaacRse21jxjpaqQuXu/RtmG/ibEb2cNYSNfs"
+```
+
+**Result**: Configuration saved to `D:\Users\bclark\.claude.json`:
+```json
+"mcpServers": {
+  "mcp-hub": {
+    "type": "sse",
+    "url": "https://mcp-hub-6jzkdzuf2a-uc.a.run.app/v1/sse?key=..."
+  }
+}
+```
+
+#### C. Security Improvement
+**Added**: `.mcp.json` to `.gitignore` to prevent accidental API key exposure
+**Commit**: `05723a9` - chore: add .mcp.json to gitignore
+
+**Key Learnings**:
+
+1. **MCP Configuration Scopes**:
+   - `--scope user` - Global config in `~/.claude.json` (available everywhere)
+   - `--scope project` - Local config in `.mcp.json` (project-specific)
+   - VS Code extension uses project-level by default
+
+2. **Claude CLI Installation**:
+   - VS Code extension doesn't include CLI in PATH
+   - Must install separately: `npm install -g @anthropic-ai/claude-code`
+   - After install, `claude` command available globally
+
+3. **Configuration File Locations**:
+   - User config: `D:\Users\bclark\.claude.json`
+   - Project config: `<project>/.mcp.json`
+   - User config takes precedence if both exist
+
+**Current State**:
+- ✅ MCP Hub available globally in all Claude Code sessions
+- ✅ No per-project configuration needed
+- ✅ API key protected from git commits
+- ✅ 22 tools accessible everywhere (memory, artifacts, Figma, GitHub, Confluence, Slack, Gamma, BC Prompt Library)
+
+**Workflow for New Projects**:
+1. Open any project in VS Code with Claude Code extension
+2. MCP Hub connects automatically
+3. All 22 tools immediately available
+4. No setup required
 
