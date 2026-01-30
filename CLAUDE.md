@@ -88,11 +88,11 @@ Connection   // Dynamic upstream MCP server connections
 ## Current Work & Recent Changes
 
 ### Recent Commits (Last 5)
-1. `05723a9` - chore: add .mcp.json to gitignore
-2. `27c8308` - docs: document BC Prompt Library integration and complete connector setup session
-3. `9f4e59d` - feat: add all connector tokens to Cloud Run deployment
-4. `a5d1c9e` - feat: add BC Prompt Library to connections list
-5. `961bff3` - feat: integrate BC Prompt Library into MCP Hub
+1. `13579cf` - chore: trigger redeployment for GH_PAT secret
+2. `e826c0b` - docs: document Gamma timeout fix and connector test endpoint session
+3. `e502cb2` - fix: use GH_PAT secret name (GITHUB_ prefix is reserved)
+4. `591527b` - feat: add /v1/test/connectors endpoint for quick validation
+5. `8b76fac` - fix: add fast timeout and graceful error handling for Gamma status checks
 
 ### Active Work Areas
 
@@ -891,10 +891,31 @@ curl "https://mcp-hub-6jzkdzuf2a-uc.a.run.app/v1/test/connectors?key=YOUR_API_KE
 curl "https://mcp-hub-6jzkdzuf2a-uc.a.run.app/v1/test/connectors?key=N0mAdgBaacRse21jxjpaqQuXu/RtmG/ibEb2cNYSNfs"
 ```
 
-**Current State**:
-- ✅ Gamma timeout fix deployed
-- ✅ Connector test endpoint deployed
-- ⏳ Waiting for Cloud Run deployment to complete
+#### C. GitHub Secret Naming Fix
+**Problem**: GitHub connector showing "GITHUB_TOKEN not configured" despite user adding the secret.
+
+**Root Cause**:
+- GitHub reserves the `GITHUB_` prefix for its own secrets
+- Cannot create a secret named `GITHUB_TOKEN` in GitHub Actions
+- Solution: Secret must be named `GH_PAT` and mapped to `GITHUB_TOKEN` env var
+
+**Workflow Fix** ([.github/workflows/mcp-hub-cloudrun.yml](.github/workflows/mcp-hub-cloudrun.yml)):
+```yaml
+--set-env-vars GITHUB_TOKEN="${{ secrets.GH_PAT }}"
+```
+
+**Commits**:
+- `e502cb2` - fix: use GH_PAT secret name (GITHUB_ prefix is reserved)
+- `13579cf` - chore: trigger redeployment for GH_PAT secret
+
+**Current State** (All connectors verified working):
+| Connector | Status | Test Result |
+|-----------|--------|-------------|
+| Gamma | ✅ | Connected |
+| Figma | ✅ | Connected |
+| GitHub | ✅ | Connected |
+| Slack | ✅ | Connected |
+| Confluence | ✅ | Configured |
 
 ---
 
@@ -919,4 +940,5 @@ curl "https://mcp-hub-6jzkdzuf2a-uc.a.run.app/v1/status?key=YOUR_KEY"
 | "Operation aborted" | Same as above | Don't retry, use REST test |
 | 401 on connector | Invalid/expired API key | Update GitHub Secret, redeploy |
 | Server not responding | Supabase paused | Resume database in dashboard |
+| "GITHUB_TOKEN not configured" | Secret naming restriction | Use `GH_PAT` secret (GITHUB_ prefix reserved) |
 
