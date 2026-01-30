@@ -80,6 +80,7 @@ export interface Theme {
 }
 
 const DEFAULT_TIMEOUT_MS = 30000;
+const STATUS_CHECK_TIMEOUT_MS = 5000; // Fast timeout for status checks
 const MAX_NUM_CARDS = 75;
 
 export class GammaClient {
@@ -117,7 +118,10 @@ export class GammaClient {
 
   async getGenerationStatus(generationId: string): Promise<GenerationResponse> {
     try {
-      const response = await this.client.get(`/v0.2/generations/${generationId}`);
+      // Use a shorter timeout for status checks - they should be fast
+      const response = await this.client.get(`/v0.2/generations/${generationId}`, {
+        timeout: STATUS_CHECK_TIMEOUT_MS,
+      });
       return {
         generationId,
         status: response.data.status,
@@ -128,18 +132,33 @@ export class GammaClient {
       };
     } catch (error) {
       if (axios.isAxiosError(error)) {
+        // For timeout errors, return a helpful status instead of throwing
+        if (error.code === 'ECONNABORTED' || error.code === 'ETIMEDOUT') {
+          return {
+            generationId,
+            status: 'checking',
+            message: 'Status check timed out - generation may still be in progress. Try again in a few seconds.',
+          };
+        }
         return this.handleAxiosError(error, generationId);
       }
       throw error;
     }
   }
 
-  async getAvailableThemes(): Promise<Theme[]> {
+  async getAvailableThemes(): Promise<Theme[] | { error: string }> {
     try {
-      const response = await this.client.get('/v0.2/themes');
+      const response = await this.client.get('/v0.2/themes', {
+        timeout: STATUS_CHECK_TIMEOUT_MS,
+      });
       return response.data.themes || [];
-    } catch {
-      return [];
+    } catch (error) {
+      if (axios.isAxiosError(error)) {
+        const status = error.response?.status;
+        const message = (error.response?.data as any)?.message || error.message;
+        return { error: `Failed to fetch themes: ${status} - ${message}` };
+      }
+      return { error: 'Failed to fetch themes' };
     }
   }
 
