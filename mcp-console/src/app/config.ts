@@ -2,7 +2,7 @@ export const config = {
   // Use Cloud Run by default, fallback to localhost for local development
   hubUrl: import.meta.env.VITE_HUB_URL || 'https://mcp-hub-6jzkdzuf2a-uc.a.run.app',
   // API key must be provided via environment variable or updated here
-  hubApiKey: import.meta.env.VITE_HUB_API_KEY || 'Iwant@newpass007',
+  hubApiKey: import.meta.env.VITE_HUB_API_KEY || 'N0mAdgBaacRse21jxjpaqQuXu/RtmG/ibEb2cNYSNfs',
 };
 
 // Warn if using default API key in production
