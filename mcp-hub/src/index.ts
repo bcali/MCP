@@ -276,6 +276,60 @@ app.get('/v1/test/connectors', apiKeyAuth(env.MCP_HUB_API_KEY), async (_req, res
   res.json(results);
 });
 
+// Gamma REST endpoints (bypass MCP for reliable access)
+app.post('/v1/gamma/generate', apiKeyAuth(env.MCP_HUB_API_KEY), express.json(), async (req, res) => {
+  if (!env.GAMMA_API_KEY) {
+    res.status(500).json({ error: 'GAMMA_API_KEY not configured' });
+    return;
+  }
+  try {
+    const response = await fetch('https://public-api.gamma.app/v0.2/generations', {
+      method: 'POST',
+      headers: {
+        'X-API-KEY': env.GAMMA_API_KEY,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(req.body),
+    });
+    const data = await response.json();
+    res.status(response.status).json(data);
+  } catch (e) {
+    res.status(500).json({ error: e instanceof Error ? e.message : 'Unknown error' });
+  }
+});
+
+app.get('/v1/gamma/status/:generationId', apiKeyAuth(env.MCP_HUB_API_KEY), async (req, res) => {
+  if (!env.GAMMA_API_KEY) {
+    res.status(500).json({ error: 'GAMMA_API_KEY not configured' });
+    return;
+  }
+  try {
+    const response = await fetch(`https://public-api.gamma.app/v0.2/generations/${req.params.generationId}`, {
+      headers: { 'X-API-KEY': env.GAMMA_API_KEY },
+    });
+    const data = await response.json();
+    res.status(response.status).json(data);
+  } catch (e) {
+    res.status(500).json({ error: e instanceof Error ? e.message : 'Unknown error' });
+  }
+});
+
+app.get('/v1/gamma/themes', apiKeyAuth(env.MCP_HUB_API_KEY), async (_req, res) => {
+  if (!env.GAMMA_API_KEY) {
+    res.status(500).json({ error: 'GAMMA_API_KEY not configured' });
+    return;
+  }
+  try {
+    const response = await fetch('https://public-api.gamma.app/v0.2/themes', {
+      headers: { 'X-API-KEY': env.GAMMA_API_KEY },
+    });
+    const data = await response.json();
+    res.status(response.status).json(data);
+  } catch (e) {
+    res.status(500).json({ error: e instanceof Error ? e.message : 'Unknown error' });
+  }
+});
+
 // SSE endpoint
 app.get('/v1/sse', apiKeyAuth(env.MCP_HUB_API_KEY), async (req, res) => {
   const transport = new SSEServerTransport('/mcp', res);
