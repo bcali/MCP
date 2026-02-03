@@ -1,4 +1,6 @@
 import axios, { AxiosError, type AxiosInstance } from 'axios';
+import http from 'node:http';
+import https from 'node:https';
 import {
   CARD_DIMENSIONS,
   CARD_DIMENSIONS_BY_FORMAT,
@@ -79,9 +81,39 @@ export interface Theme {
   preview?: string;
 }
 
-const DEFAULT_TIMEOUT_MS = 30000;
+// Reduced timeouts to fail fast - Claude Code MCP client has strict limits
+const DEFAULT_TIMEOUT_MS = 10000; // 10s instead of 30s
 const STATUS_CHECK_TIMEOUT_MS = 5000; // Fast timeout for status checks
 const MAX_NUM_CARDS = 75;
+
+// Theme cache to avoid repeated API calls (themes rarely change)
+const THEME_CACHE_TTL_MS = 10 * 60 * 1000; // 10 minutes
+let themeCache: { themes: Theme[]; timestamp: number } | null = null;
+
+// Keep-alive agents for connection reuse (reduces latency significantly)
+const httpAgent = new http.Agent({ keepAlive: true, timeout: 60000 });
+const httpsAgent = new https.Agent({ keepAlive: true, timeout: 60000 });
+
+// Simple retry utility with exponential backoff
+async function withRetry<T>(
+  fn: () => Promise<T>,
+  maxRetries: number = 2,
+  baseDelayMs: number = 500
+): Promise<T> {
+  let lastError: Error | undefined;
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      return await fn();
+    } catch (error) {
+      lastError = error as Error;
+      if (attempt < maxRetries) {
+        const delay = baseDelayMs * Math.pow(2, attempt);
+        await new Promise(resolve => setTimeout(resolve, delay));
+      }
+    }
+  }
+  throw lastError;
+}
 
 export class GammaClient {
   private client: AxiosInstance;
@@ -94,6 +126,8 @@ export class GammaClient {
         'Content-Type': 'application/json',
       },
       timeout: DEFAULT_TIMEOUT_MS,
+      httpAgent,
+      httpsAgent,
     });
   }
 
@@ -118,10 +152,14 @@ export class GammaClient {
 
   async getGenerationStatus(generationId: string): Promise<GenerationResponse> {
     try {
-      // Use a shorter timeout for status checks - they should be fast
-      const response = await this.client.get(`/v0.2/generations/${generationId}`, {
-        timeout: STATUS_CHECK_TIMEOUT_MS,
-      });
+      // Use retry for status checks (safe - idempotent operation)
+      const response = await withRetry(
+        () => this.client.get(`/v0.2/generations/${generationId}`, {
+          timeout: STATUS_CHECK_TIMEOUT_MS,
+        }),
+        2, // max 2 retries
+        300 // start with 300ms delay
+      );
       return {
         generationId,
         status: response.data.status,
@@ -147,12 +185,24 @@ export class GammaClient {
   }
 
   async getAvailableThemes(): Promise<Theme[] | { error: string }> {
+    // Return cached themes if still valid
+    if (themeCache && Date.now() - themeCache.timestamp < THEME_CACHE_TTL_MS) {
+      return themeCache.themes;
+    }
+
     try {
       const response = await this.client.get('/v0.2/themes', {
         timeout: STATUS_CHECK_TIMEOUT_MS,
       });
-      return response.data.themes || [];
+      const themes = response.data.themes || [];
+      // Cache the result
+      themeCache = { themes, timestamp: Date.now() };
+      return themes;
     } catch (error) {
+      // If we have stale cache, return it on error (graceful degradation)
+      if (themeCache) {
+        return themeCache.themes;
+      }
       if (axios.isAxiosError(error)) {
         const status = error.response?.status;
         const message = (error.response?.data as any)?.message || error.message;
@@ -173,6 +223,16 @@ export class GammaClient {
   }
 }
 
+// Singleton client instance for connection reuse
+let gammaClientInstance: GammaClient | null = null;
+
+function getGammaClient(apiKey: string): GammaClient {
+  if (!gammaClientInstance) {
+    gammaClientInstance = new GammaClient(apiKey);
+  }
+  return gammaClientInstance;
+}
+
 export async function gammaGenerate({
   params,
   store,
@@ -185,17 +245,18 @@ export async function gammaGenerate({
   if (!env.GAMMA_API_KEY) {
     throw new Error('GAMMA_API_KEY is not configured');
   }
-  const client = new GammaClient(env.GAMMA_API_KEY);
+  const client = getGammaClient(env.GAMMA_API_KEY);
   const result = await client.generateContent(params);
 
-  await store.createArtifact({
+  // Don't await artifact creation - do it async to speed up response
+  store.createArtifact({
     type: 'gamma_generation',
     name: `Gamma Generation: ${params.inputText.slice(0, 30)}...`,
     source: 'gamma',
     contentType: 'application/json',
     contentText: JSON.stringify(result, null, 2),
     metadata: { params, result },
-  });
+  }).catch(() => {}); // Ignore artifact storage errors
 
   return result;
 }
@@ -210,7 +271,7 @@ export async function gammaGetStatus({
   if (!env.GAMMA_API_KEY) {
     throw new Error('GAMMA_API_KEY is not configured');
   }
-  const client = new GammaClient(env.GAMMA_API_KEY);
+  const client = getGammaClient(env.GAMMA_API_KEY);
   return await client.getGenerationStatus(generationId);
 }
 
@@ -218,7 +279,7 @@ export async function gammaGetThemes({ env }: { env: Env }) {
   if (!env.GAMMA_API_KEY) {
     throw new Error('GAMMA_API_KEY is not configured');
   }
-  const client = new GammaClient(env.GAMMA_API_KEY);
+  const client = getGammaClient(env.GAMMA_API_KEY);
   return await client.getAvailableThemes();
 }
 

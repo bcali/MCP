@@ -28,7 +28,9 @@ async function getPromptsData(): Promise<Prompt[]> {
   }
 
   try {
-    const response = await fetch(PROMPTS_DATA_URL);
+    const response = await fetch(PROMPTS_DATA_URL, {
+      signal: AbortSignal.timeout(5000), // 5 second timeout
+    });
     const text = await response.text();
 
     // Extract JSON from JavaScript file

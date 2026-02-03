@@ -3,6 +3,7 @@ import type { HubStore } from '../store/types.js';
 
 // Base Figma API URL
 const FIGMA_API_BASE = 'https://api.figma.com/v1';
+const FIGMA_TIMEOUT_MS = 8000; // 8 second timeout for Figma API calls
 
 // Helper to make Figma API requests
 async function figmaRequest(
@@ -10,21 +11,29 @@ async function figmaRequest(
   token: string,
   options?: RequestInit
 ): Promise<{ ok: true; data: unknown } | { ok: false; error: string; details?: string }> {
-  const resp = await fetch(`${FIGMA_API_BASE}${endpoint}`, {
-    ...options,
-    headers: {
-      'X-Figma-Token': token,
-      ...options?.headers,
-    },
-  });
+  try {
+    const resp = await fetch(`${FIGMA_API_BASE}${endpoint}`, {
+      ...options,
+      signal: AbortSignal.timeout(FIGMA_TIMEOUT_MS),
+      headers: {
+        'X-Figma-Token': token,
+        ...options?.headers,
+      },
+    });
 
-  if (!resp.ok) {
-    const text = await resp.text();
-    return { ok: false, error: `Figma API error: ${resp.status} ${resp.statusText}`, details: text };
+    if (!resp.ok) {
+      const text = await resp.text();
+      return { ok: false, error: `Figma API error: ${resp.status} ${resp.statusText}`, details: text };
+    }
+
+    const data = await resp.json();
+    return { ok: true, data };
+  } catch (error) {
+    if (error instanceof Error && error.name === 'TimeoutError') {
+      return { ok: false, error: 'Figma API request timed out', details: 'Request exceeded 8 second timeout' };
+    }
+    return { ok: false, error: `Figma API request failed: ${error instanceof Error ? error.message : 'Unknown error'}` };
   }
-
-  const data = await resp.json();
-  return { ok: true, data };
 }
 
 // Helper to parse Figma URL and extract file key and node ID

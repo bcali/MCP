@@ -1,6 +1,8 @@
 import type { Env } from '../config.js';
 import type { HubStore } from '../store/types.js';
 
+const SLACK_TIMEOUT_MS = 8000; // 8 second timeout for Slack API calls
+
 export async function slackPostMessage({
   channel,
   text,
@@ -18,6 +20,7 @@ export async function slackPostMessage({
 
   const resp = await fetch('https://slack.com/api/chat.postMessage', {
     method: 'POST',
+    signal: AbortSignal.timeout(SLACK_TIMEOUT_MS),
     headers: {
       Authorization: `Bearer ${env.SLACK_BOT_TOKEN}`,
       'Content-Type': 'application/json; charset=utf-8',

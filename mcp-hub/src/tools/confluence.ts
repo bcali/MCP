@@ -1,6 +1,8 @@
 import type { Env } from '../config.js';
 import type { HubStore } from '../store/types.js';
 
+const CONFLUENCE_TIMEOUT_MS = 8000; // 8 second timeout for Confluence API calls
+
 function requireAtlassianConfig(env: Env) {
   const missing = [
     !env.ATLASSIAN_EMAIL ? 'ATLASSIAN_EMAIL' : null,
@@ -46,6 +48,7 @@ export async function confluenceUpsertPage({
   const cql = `space="${escapeCql(spaceKey)}" AND type=page AND title="${escapeCql(title)}"`;
   const searchUrl = `${cfg.baseUrl}/rest/api/content/search?cql=${encodeURIComponent(cql)}&limit=1&expand=version`;
   const searchResp = await fetch(searchUrl, {
+    signal: AbortSignal.timeout(CONFLUENCE_TIMEOUT_MS),
     headers: {
       Authorization: `Basic ${auth}`,
       Accept: 'application/json',
@@ -80,6 +83,7 @@ export async function confluenceUpsertPage({
     };
     const createResp = await fetch(createUrl, {
       method: 'POST',
+      signal: AbortSignal.timeout(CONFLUENCE_TIMEOUT_MS),
       headers: {
         Authorization: `Basic ${auth}`,
         Accept: 'application/json',
@@ -124,6 +128,7 @@ export async function confluenceUpsertPage({
   const updateUrl = `${cfg.baseUrl}/rest/api/content/${encodeURIComponent(pageId)}`;
   const updateResp = await fetch(updateUrl, {
     method: 'PUT',
+    signal: AbortSignal.timeout(CONFLUENCE_TIMEOUT_MS),
     headers: {
       Authorization: `Basic ${auth}`,
       Accept: 'application/json',

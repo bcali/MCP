@@ -1,6 +1,8 @@
 import type { Env } from '../config.js';
 import type { HubStore } from '../store/types.js';
 
+const GITHUB_TIMEOUT_MS = 8000; // 8 second timeout for GitHub API calls
+
 function requireGithubToken(env: Env) {
   if (!env.GITHUB_TOKEN) {
     throw new Error('GITHUB_TOKEN is not configured');
@@ -33,6 +35,7 @@ export async function githubPutFile({
   const getResp = await fetch(
     `https://api.github.com/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/contents/${path}?ref=${encodeURIComponent(branch)}`,
     {
+      signal: AbortSignal.timeout(GITHUB_TIMEOUT_MS),
       headers: {
         Authorization: `Bearer ${token}`,
         Accept: 'application/vnd.github+json',
@@ -58,6 +61,7 @@ export async function githubPutFile({
     `https://api.github.com/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/contents/${path}`,
     {
       method: 'PUT',
+      signal: AbortSignal.timeout(GITHUB_TIMEOUT_MS),
       headers: {
         Authorization: `Bearer ${token}`,
         Accept: 'application/vnd.github+json',
@@ -108,6 +112,7 @@ export async function githubCreatePullRequest({
 
   const resp = await fetch(`https://api.github.com/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/pulls`, {
     method: 'POST',
+    signal: AbortSignal.timeout(GITHUB_TIMEOUT_MS),
     headers: {
       Authorization: `Bearer ${token}`,
       Accept: 'application/vnd.github+json',
