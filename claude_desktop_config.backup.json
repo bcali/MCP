@@ -1,0 +1,22 @@
+{
+  "mcpServers": {
+    "gamma": {
+      "command": "node",
+      "args": [
+        "D:\\Users\\bclark\\mcp-servers\\gamma-mcp-server\\dist\\index.js"
+      ],
+      "env": {
+        "GAMMA_API_KEY": "sk-gamma-3saTZquF4HntYp7q1h9Vw264clLq2ZJlMjqjPLkCAg"
+      }
+    },
+    "bc-prompt-library": {
+      "command": "node",
+      "args": [
+        "D:\\Users\\bclark\\prompt-library\\mcp-server\\index.js"
+      ]
+    }
+  },
+  "preferences": {
+    "sidebarMode": "chat"
+  }
+}
