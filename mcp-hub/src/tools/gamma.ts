@@ -1,3 +1,4 @@
+// Gamma API v1.0 integration - updated 2026-02-05
 import axios, { AxiosError, type AxiosInstance } from 'axios';
 import http from 'node:http';
 import https from 'node:https';
