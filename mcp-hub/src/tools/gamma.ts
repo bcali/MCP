@@ -120,7 +120,7 @@ export class GammaClient {
 
   constructor(apiKey: string) {
     this.client = axios.create({
-      baseURL: 'https://public-api.gamma.app',
+      baseURL: 'https://public-api.gamma.app/v1.0',
       headers: {
         'X-API-KEY': apiKey,
         'Content-Type': 'application/json',
@@ -133,7 +133,9 @@ export class GammaClient {
 
   async generateContent(params: GenerateContentParams): Promise<GenerationResponse> {
     try {
-      const response = await this.client.post('/v0.2/generations', params);
+      // textMode is required in v1.0 API - default to 'generate' if not provided
+      const payload = { ...params, textMode: params.textMode || 'generate' };
+      const response = await this.client.post('/generations', payload);
       return {
         generationId: response.data.generationId || response.data.id,
         status: response.data.status || 'submitted',
@@ -154,7 +156,7 @@ export class GammaClient {
     try {
       // Use retry for status checks (safe - idempotent operation)
       const response = await withRetry(
-        () => this.client.get(`/v0.2/generations/${generationId}`, {
+        () => this.client.get(`/generations/${generationId}`, {
           timeout: STATUS_CHECK_TIMEOUT_MS,
         }),
         2, // max 2 retries
@@ -191,7 +193,7 @@ export class GammaClient {
     }
 
     try {
-      const response = await this.client.get('/v0.2/themes', {
+      const response = await this.client.get('/themes', {
         timeout: STATUS_CHECK_TIMEOUT_MS,
       });
       const themes = response.data.themes || [];
